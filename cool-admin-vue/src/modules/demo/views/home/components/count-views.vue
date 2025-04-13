@@ -1,18 +1,26 @@
 <template>
-	<div class="count-views">
+	<div class="count-sales">
 		<div class="card">
 			<div class="card__header">
-				<span class="label">{{ $t('浏览量') }}</span>
-				<cl-svg name="trend" class="icon" />
+				<span class="label">{{ $t('实训项目数') }}</span>
+				<cl-svg name="view" class="icon" />
 			</div>
 
 			<div class="card__container">
-				<v-chart :option="chartOption" autoresize />
+				<cl-number :value="num" class="num" />
+
+				<div class="rise">
+					<span>{{ $t('较上月') }}</span>
+					<el-icon>
+						<top-right />
+					</el-icon>
+					<span>+4%</span>
+				</div>
 			</div>
 
 			<div class="card__footer">
-				<span class="mr-2">{{ $t('访客数') }}</span>
-				<span>142</span>
+				<span class="mr-2">{{ $t('访问量') }}</span>
+				<cl-number :value="visits" />
 			</div>
 		</div>
 	</div>
@@ -84,14 +92,16 @@ const chartOption = reactive({
 });
 
 const num = ref(0);
+const visits = ref(0);
 
 onMounted(() => {
 	num.value = random(1000000);
+	visits.value = random(1000000);
 });
 </script>
 
 <style lang="scss" scoped>
-.count-views {
+.count-sales {
 	.card {
 		.echarts {
 			height: 50px;

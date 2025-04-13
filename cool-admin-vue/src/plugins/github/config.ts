@@ -2,8 +2,10 @@ import { type ModuleConfig } from '/@/cool';
 
 export default (): ModuleConfig => {
 	return {
+		enable: false,
 		toolbar: {
-			component: import('./components/code.vue')
+			component: null,
+			enable: false
 		}
 	};
 };

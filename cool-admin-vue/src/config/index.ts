@@ -9,7 +9,7 @@ export const isDev = import.meta.env.DEV;
 export const config = {
 	// 项目信息
 	app: {
-		name: import.meta.env.VITE_NAME,
+		name: '工程实训管理系统',
 
 		// 菜单
 		menu: {

@@ -2,6 +2,7 @@ import { type ModuleConfig } from '/@/cool';
 
 export default (): ModuleConfig => {
 	return {
+		enable: false,
 		options: {
 			index: 'https://cool-js.com',
 			api: 'https://service.cool-js.com/api'
@@ -9,7 +10,8 @@ export default (): ModuleConfig => {
 		toolbar: {
 			h5: false,
 			order: 1,
-			component: import('./components/ai-code/btn.vue')
+			component: null,
+			enable: false
 		},
 		pages: [
 			{

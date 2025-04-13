@@ -1,42 +1,33 @@
 <template>
-	<div class="count-effect">
+	<div class="count-sales">
 		<div class="card">
 			<div class="card__header">
-				<span class="label">{{ $t('总销售额') }}</span>
-
-				<cl-svg name="amount" class="icon" />
+				<span class="label">{{ $t('指导教师数') }}</span>
+				<cl-svg name="user-info" class="icon" />
 			</div>
 
 			<div class="card__container">
-				<cl-number :value="num" class="num" type="amount" suffix="元" />
+				<cl-number :value="num" class="num" />
+
+				<div class="rise">
+					<span>{{ $t('较上周') }}</span>
+					<el-icon>
+						<top-right />
+					</el-icon>
+
+					<span>+7%</span>
+				</div>
 			</div>
 
 			<div class="card__footer">
-				<ul class="cop">
-					<li>
-						<span>{{ $t('周同比') }}</span>
-
-						<div class="fall">
-							<el-icon>
-								<bottom-right />
-							</el-icon>
-
-							<span>-4%</span>
-						</div>
-					</li>
-
-					<li>
-						<span>{{ $t('日同比') }}</span>
-
-						<div class="rise">
-							<el-icon>
-								<top-right />
-							</el-icon>
-
-							<span>+7%</span>
-						</div>
-					</li>
-				</ul>
+				<span>{{ $t('日同比') }}</span>
+				<span class="ml-1 rise">
+					<cl-number :value="62" /> %
+				</span>
+				<span class="ml-2">{{ $t('周同比') }}</span>
+				<span class="ml-1 fall">
+					<cl-number :value="14" /> %
+				</span>
 			</div>
 		</div>
 	</div>
@@ -57,7 +48,7 @@ onMounted(() => {
 </script>
 
 <style lang="scss" scoped>
-.count-effect {
+.count-sales {
 	.cop {
 		display: flex;
 		justify-content: space-between;
