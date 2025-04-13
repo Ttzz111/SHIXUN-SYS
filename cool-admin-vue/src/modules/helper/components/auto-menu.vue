@@ -14,8 +14,6 @@
 			/>
 		</template>
 	</cl-form>
-
-	<ai-code-dev path="/ai" :ref="setRefs('aiCode')" hide />
 </template>
 
 <script lang="ts" setup>
@@ -31,9 +29,8 @@ import { computed, onMounted } from 'vue';
 import { useMenu } from '../hooks';
 import { useI18n } from 'vue-i18n';
 import { isDev } from '/@/config';
-import AiCodeDev from './ai-code/dev.vue';
 
-const { service, mitt, refs, setRefs } = useCool();
+const { service, mitt, refs } = useCool();
 const menu = useMenu();
 const Form = useForm();
 const { t } = useI18n();
@@ -46,8 +43,6 @@ const tree = computed(() => deepPaths(list.map(e => e.value)));
 
 // 打开
 function open() {
-	refs.aiCode.send('getEps');
-
 	Form.value?.open({
 		title: t('快速创建'),
 		width: '800px',
@@ -149,33 +144,22 @@ function open() {
 			async submit(data, { done, close }) {
 				const entity = list.find(e => e.value == data.entity.join('/'));
 
-				// 发送消息
-				refs.aiCode.send(
-					'createVue',
-					{
-						...entity,
-						router: data.router
-					},
-					(code: string) => {
-						menu.create({
-							...data,
-							module: entity.module,
-							prefix: entity.prefix,
-							api: entity.api,
-							code
-						})
-							.then(create => {
-								mitt.emit('helper.createMenu');
-
-								create();
-								close();
-							})
-							.catch(err => {
-								console.error(err);
-								done();
-							});
-					}
-				);
+				// 创建菜单
+				menu.create({
+					...data,
+					module: entity.module,
+					prefix: entity.prefix,
+					api: entity.api
+				})
+					.then(create => {
+						mitt.emit('helper.createMenu');
+						create();
+						close();
+					})
+					.catch(err => {
+						console.error(err);
+						done();
+					});
 			}
 		}
 	});

@@ -13,21 +13,19 @@
 		<p class="loader__text">{{ loader.text }}</p>
 	</div>
 
-	<ai-code-dev path="/ai/code" :ref="setRefs('aiCode')" @message="onMessage" />
+	<div class="content">
+		<el-empty description="AI代码功能已移除"></el-empty>
+	</div>
 </template>
 
 <script setup lang="ts">
 import { reactive } from 'vue';
 import { useCool } from '/@/cool';
 import { useMenu } from '../hooks';
-import { startsWith } from 'lodash-es';
 import { useI18n } from 'vue-i18n';
 import { ElMessageBox } from 'element-plus';
-import AiCodeDev from '../components/ai-code/dev.vue';
-import { ctx } from 'virtual:ctx';
 
-const { router, service, refs, setRefs } = useCool();
-const menu = useMenu();
+const { router } = useCool();
 const { t } = useI18n();
 
 // 加载框
@@ -49,7 +47,7 @@ const loader = reactive({
 });
 
 function back() {
-	ElMessageBox.confirm(t('确定要退出编码吗？'), t('提示'))
+	ElMessageBox.confirm(t('确定要退出吗？'), t('提示'))
 		.then(() => {
 			router.replace('/');
 		})
@@ -189,6 +187,14 @@ async function checkService() {
 	border: none;
 	width: 100%;
 	height: 100%;
+}
+
+.content {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	height: 100vh;
+	width: 100%;
 }
 
 .loader {
