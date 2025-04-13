@@ -17,6 +17,22 @@
 						/>
 					</el-form-item>
 
+					<el-form-item :label="$t('手机号')">
+						<el-input
+							v-model="form.phone"
+							:placeholder="$t('请填写手机号')"
+							clearable
+						/>
+					</el-form-item>
+
+					<el-form-item :label="$t('邮箱')">
+						<el-input
+							v-model="form.email"
+							:placeholder="$t('请填写邮箱')"
+							clearable
+						/>
+					</el-form-item>
+
 					<el-form-item :label="$t('原密码')">
 						<el-input
 							v-model="form.oldPassword"
@@ -65,6 +81,8 @@ const { user } = useBase();
 const form = reactive({
 	headImg: '',
 	nickName: '',
+	phone: '',
+	email: '',
 	password: '',
 	oldPassword: ''
 });
@@ -95,6 +113,8 @@ async function save() {
 onMounted(() => {
 	form.headImg = user.info?.headImg || '';
 	form.nickName = user.info?.nickName || '';
+	form.phone = user.info?.phone || '';
+	form.email = user.info?.email || '';
 });
 </script>
 

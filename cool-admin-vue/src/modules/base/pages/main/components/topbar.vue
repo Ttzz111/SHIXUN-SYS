@@ -37,7 +37,14 @@
 
 						<div class="det">
 							<el-text size="small" tag="p">{{ user.info.nickName }}</el-text>
-							<el-text size="small" type="info">{{ user.info.email }}</el-text>
+							<div class="user-info">
+								<el-text size="small" type="info" v-if="user.info.email">
+									<el-icon><Message /></el-icon> {{ user.info.email }}
+								</el-text>
+								<el-text size="small" type="info" v-if="user.info.phone">
+									<el-icon><Phone /></el-icon> {{ user.info.phone }}
+								</el-text>
+							</div>
 						</div>
 					</div>
 
@@ -70,6 +77,7 @@ import { ElMessageBox } from 'element-plus';
 import { useI18n } from 'vue-i18n';
 import RouteNav from './route-nav.vue';
 import AMenu from './amenu.vue';
+import { Message, Phone } from '@element-plus/icons-vue';
 
 const { router, service, browser } = useCool();
 const { user, app } = useBase();
@@ -208,6 +216,21 @@ onMounted(() => {
 			margin-left: 10px;
 			flex: 1;
 			font-size: 12px;
+			
+			.user-info {
+				display: flex;
+				flex-direction: column;
+				
+				.el-text {
+					margin-top: 3px;
+					display: flex;
+					align-items: center;
+					
+					i {
+						margin-right: 5px;
+					}
+				}
+			}
 		}
 	}
 

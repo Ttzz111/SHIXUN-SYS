@@ -113,6 +113,9 @@ public class BaseSysUserServiceImpl extends BaseServiceImpl<BaseSysUserMapper, B
         CoolPreconditions.checkEmpty(userEntity, "用户不存在");
         userEntity.setNickName(body.getStr("nickName"));
         userEntity.setHeadImg(body.getStr("headImg"));
+        // 添加邮箱和手机号的更新
+        userEntity.setEmail(body.getStr("email"));
+        userEntity.setPhone(body.getStr("phone"));
         // 修改密码
         if (StrUtil.isNotEmpty(body.getStr("password"))) {
             userEntity.setPassword(MD5.create().digestHex(body.getStr("password")));
