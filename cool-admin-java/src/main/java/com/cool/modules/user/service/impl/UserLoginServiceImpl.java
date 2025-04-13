@@ -15,8 +15,6 @@ import com.cool.modules.base.service.sys.BaseSysLoginService;
 import com.cool.modules.user.entity.UserInfoEntity;
 import com.cool.modules.user.service.UserInfoService;
 import com.cool.modules.user.service.UserLoginService;
-import com.cool.modules.user.util.UserSmsUtil;
-import com.cool.modules.user.util.UserSmsUtil.SendSceneEnum;
 import com.mybatisflex.core.query.QueryWrapper;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -34,8 +32,6 @@ public class UserLoginServiceImpl implements UserLoginService {
 
     private final UserInfoService userInfoService;
 
-    private final UserSmsUtil userSmsUtil;
-
     private final BaseSysLoginService baseSysLoginService;
 
     private final static List<GrantedAuthority> authority =
@@ -45,14 +41,13 @@ public class UserLoginServiceImpl implements UserLoginService {
     public void smsCode(String phone, String captchaId, String code) {
         // 校验图片验证码，不通过直接抛异常
         baseSysLoginService.captchaCheck(captchaId, code);
-        userSmsUtil.sendVerifyCode(phone, SendSceneEnum.ALL);
+        // 短信验证码发送逻辑已移除
         coolCache.del("verify:img:" + captchaId);
     }
 
     @Override
     public Object phoneVerifyCode(String phone, String smsCode) {
-        // 校验短信验证码，不通过直接抛异常
-        userSmsUtil.checkVerifyCode(phone, smsCode, SendSceneEnum.ALL);
+        // 校验短信验证码逻辑已移除
         return generateTokenByPhone(phone);
     }
 

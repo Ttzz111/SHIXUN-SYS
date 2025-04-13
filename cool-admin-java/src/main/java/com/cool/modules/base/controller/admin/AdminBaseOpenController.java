@@ -1,7 +1,5 @@
 package com.cool.modules.base.controller.admin;
 
-import static com.cool.core.plugin.consts.PluginConsts.captchaHook;
-
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.ObjUtil;
 import cn.hutool.json.JSONObject;
@@ -9,12 +7,10 @@ import com.cool.core.annotation.CoolRestController;
 import com.cool.core.cache.CoolCache;
 import com.cool.core.enums.UserTypeEnum;
 import com.cool.core.eps.CoolEps;
-import com.cool.core.plugin.service.CoolPluginService;
 import com.cool.core.request.R;
 import com.cool.core.util.CoolPluginInvokers;
 import com.cool.modules.base.dto.sys.BaseSysLoginDto;
 import com.cool.modules.base.service.sys.BaseSysLoginService;
-import com.cool.modules.plugin.entity.PluginInfoEntity;
 import io.micrometer.common.util.StringUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -33,7 +29,6 @@ import org.springframework.web.bind.annotation.*;
 public class AdminBaseOpenController {
 
     final private BaseSysLoginService baseSysLoginService;
-    final private CoolPluginService coolPluginService;
     final private CoolEps coolEps;
     final private CoolCache coolCache;
 
@@ -106,16 +101,5 @@ public class AdminBaseOpenController {
             return r;
         }
         return result;
-    }
-
-    @Operation(summary = "验证码类型")
-    @GetMapping("/captchaMode")
-    public R captchaMode() {
-        PluginInfoEntity pluginInfoEntity = coolPluginService.getPluginInfoEntityByHook(
-            captchaHook);
-        if (pluginInfoEntity != null) {
-            return R.ok(CoolPluginInvokers.invoke(pluginInfoEntity.getKey(), "getMode"));
-        }
-        return R.ok(Map.of("mode", "common"));
     }
 }

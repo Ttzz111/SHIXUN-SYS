@@ -1,6 +1,5 @@
 package com.cool.core.file.strategy;
 
-import com.cool.modules.plugin.entity.PluginInfoEntity;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -13,7 +12,7 @@ public interface FileUploadStrategy {
     /**
      * 文件上传
      */
-    Object upload(MultipartFile[] files, HttpServletRequest request, PluginInfoEntity pluginInfoEntity)
+    Object upload(MultipartFile[] files, HttpServletRequest request, Object uploadConfig)
             throws IOException;
 
     /**

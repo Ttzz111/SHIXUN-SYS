@@ -8,7 +8,6 @@ import com.cool.core.config.FileModeEnum;
 import com.cool.core.config.LocalFileProperties;
 import com.cool.core.exception.CoolException;
 import com.cool.core.exception.CoolPreconditions;
-import com.cool.modules.plugin.entity.PluginInfoEntity;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.File;
 import java.util.ArrayList;
@@ -34,7 +33,7 @@ public class LocalFileUploadStrategy implements FileUploadStrategy {
      */
     @Override
     public Object upload(MultipartFile[] files, HttpServletRequest request,
-        PluginInfoEntity pluginInfoEntity) {
+        Object uploadConfig) {
         CoolPreconditions.check(StrUtil.isEmpty(localFileProperties.getBaseUrl()),
             "filePath 或 baseUrl 未配置");
         try {

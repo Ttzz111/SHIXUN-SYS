@@ -5,8 +5,6 @@ import com.cool.core.base.BaseServiceImpl;
 import com.cool.modules.user.entity.UserInfoEntity;
 import com.cool.modules.user.mapper.UserInfoMapper;
 import com.cool.modules.user.service.UserInfoService;
-import com.cool.modules.user.util.UserSmsUtil;
-import com.cool.modules.user.util.UserSmsUtil.SendSceneEnum;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -14,8 +12,6 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class UserInfoServiceImpl extends BaseServiceImpl<UserInfoMapper, UserInfoEntity> implements
     UserInfoService {
-
-    private final UserSmsUtil userSmsUtil;
 
     @Override
     public UserInfoEntity person(Long userId) {
@@ -27,7 +23,6 @@ public class UserInfoServiceImpl extends BaseServiceImpl<UserInfoMapper, UserInf
     @Override
     public void updatePassword(Long userId, String password, String code) {
         UserInfoEntity info = getById(userId);
-        userSmsUtil.checkVerifyCode(info.getPhone(), code, SendSceneEnum.ALL);
         info.setPassword(MD5.create().digestHex(password));
         info.updateById();
     }
@@ -43,7 +38,6 @@ public class UserInfoServiceImpl extends BaseServiceImpl<UserInfoMapper, UserInf
 
     @Override
     public void bindPhone(Long userId, String phone, String code) {
-        userSmsUtil.checkVerifyCode(phone, code, SendSceneEnum.ALL);
         UserInfoEntity info = new UserInfoEntity();
         info.setId(userId);
         info.setPhone(phone);
