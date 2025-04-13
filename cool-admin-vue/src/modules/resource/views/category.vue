@@ -96,21 +96,8 @@
 
 		<!-- 资源列表 -->
 		<div class="resource-list-container" v-loading="loading">
-			<!-- 分页（上方） -->
-			<div class="pagination-container top">
-				<el-pagination
-					v-model:current-page="page.currentPage"
-					v-model:page-size="page.pageSize"
-					:page-sizes="[12, 24, 36, 48]"
-					layout="total, sizes, prev, pager, next, jumper"
-					:total="page.total"
-					@size-change="onSizeChange"
-					@current-change="onCurrentChange"
-					background
-					:pager-count="5"
-				/>
-			</div>
-
+			<!-- 删除顶部分页 -->
+			
 			<el-empty description="暂无数据" v-if="list.length === 0"></el-empty>
 			
 			<el-row :gutter="20" v-else class="resource-list">
@@ -180,6 +167,24 @@
 					</el-card>
 				</el-col>
 			</el-row>
+			
+			<!-- 底部分页 -->
+			<div class="pagination-footer">
+				<div class="pagination-info">
+					共 <span class="total-count">{{ page.total }}</span> 条，当前 {{ (page.currentPage - 1) * page.pageSize + 1 }}-{{ Math.min(page.currentPage * page.pageSize, page.total) }} 条
+				</div>
+				<el-pagination
+					v-model:current-page="page.currentPage"
+					v-model:page-size="page.pageSize"
+					:page-sizes="[12, 24, 36, 48]"
+					layout="sizes, prev, pager, next, jumper"
+					:total="page.total"
+					@size-change="onSizeChange"
+					@current-change="onCurrentChange"
+					background
+					:pager-count="5"
+				/>
+			</div>
 		</div>
 	</div>
 
@@ -263,7 +268,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, reactive, onMounted, computed } from 'vue';
+import { ref, reactive, onMounted, computed, nextTick } from 'vue';
 import { Search, Calendar, View, Refresh, Plus, UploadFilled, Delete, Download, User } from '@element-plus/icons-vue';
 import { useCool } from '/@/cool';
 import { useBase } from '/$/base';
@@ -465,7 +470,7 @@ const getPageState = () => {
 function getTagType(type: string): '' | 'success' | 'warning' | 'danger' | 'info' {
 	switch (type) {
 		case 'document':
-			return 'primary';
+			return '';
 		case 'video':
 			return 'danger';
 		case 'image':
@@ -526,24 +531,22 @@ function onRefresh() {
 // 添加资源
 function onAddResource() {
 	// 重置表单
-	resetResourceForm();
-	// 显示对话框
-	dialogVisible.value = true;
-}
-
-// 重置资源表单
-function resetResourceForm() {
 	resourceForm.name = '';
-	resourceForm.categoryId = undefined;
-	resourceForm.type = '';
+	resourceForm.type = resourceTypes.value[0].value;
+	resourceForm.categoryId = categoryList.value[0].id;
 	resourceForm.description = '';
 	resourceForm.file = null;
 	resourceForm.coverUrl = '';
 	
-	// 重置表单验证
-	if (formRef.value) {
-		formRef.value.resetFields();
-	}
+	// 显示对话框
+	dialogVisible.value = true;
+	
+	// 等待DOM更新后重置表单验证状态
+	nextTick(() => {
+		if (formRef.value) {
+			formRef.value.resetFields();
+		}
+	});
 }
 
 // 删除资源
@@ -589,42 +592,242 @@ function onDeleteResource(item: any) {
 	});
 }
 
-// 处理文件变化
-function handleFileChange(file: any) {
-	resourceForm.file = file.raw;
+// 文件上传变化处理
+function handleFileChange(file) {
+	if (!file) return;
+	
+	// 确保file有效
+	if (file.raw) {
+		// 检查文件大小
+		const isLt50M = file.raw.size / 1024 / 1024 < 50;
+		if (!isLt50M) {
+			ElMessage.error('文件大小不能超过 50MB!');
+			return;
+		}
+		
+		resourceForm.file = file.raw;
+		
+		// 自动设置资源类型
+		const fileType = getFileTypeFromMime(file.raw.type);
+		resourceForm.type = fileType;
+		
+		// 如果没有设置封面，自动生成封面预览
+		if (!resourceForm.coverUrl) {
+			// 对于图片类型自动使用上传的图片作为封面
+			if (file.raw.type.startsWith('image/')) {
+				createCoverFromFile(file.raw);
+			}
+		}
+	} else if (file.file) {
+		// 检查文件大小
+		const isLt50M = file.file.size / 1024 / 1024 < 50;
+		if (!isLt50M) {
+			ElMessage.error('文件大小不能超过 50MB!');
+			return;
+		}
+		
+		resourceForm.file = file.file;
+		
+		// 自动设置资源类型
+		const fileType = getFileTypeFromMime(file.file.type);
+		resourceForm.type = fileType;
+		
+		// 如果没有设置封面，自动生成封面预览
+		if (!resourceForm.coverUrl) {
+			// 对于图片类型自动使用上传的图片作为封面
+			if (file.file.type.startsWith('image/')) {
+				createCoverFromFile(file.file);
+			}
+		}
+	}
+	
+	console.log('文件已选择：', resourceForm.file);
 }
 
-// 处理封面变化
-function handleCoverChange(file: any) {
-	// 显示图片预览
-	resourceForm.coverUrl = URL.createObjectURL(file.raw);
+// 从文件生成封面
+function createCoverFromFile(file) {
+	if (!file) return;
+	if (!file.type || !file.type.startsWith('image/')) return;
+	
+	const reader = new FileReader();
+	reader.onload = (e) => {
+		resourceForm.coverUrl = e.target?.result || '';
+	};
+	reader.readAsDataURL(file);
+}
+
+// 封面变化处理
+function handleCoverChange(file) {
+	if (!file) return;
+	if (file.raw) {
+		createCoverFromFile(file.raw);
+	} else if (file.file) {
+		createCoverFromFile(file.file);
+	}
 }
 
 // 提交表单
-function submitResourceForm() {
-	formRef.value?.validate((valid) => {
+async function submitResourceForm() {
+	if (!formRef.value) return;
+	
+	// 手动检查文件是否已上传
+	if (!resourceForm.file) {
+		ElMessage.error('请上传资源文件');
+		return;
+	}
+	
+	formRef.value.validate(async (valid) => {
 		if (valid) {
-			// 表单验证通过，提交数据
 			loading.value = true;
 			
-			// 模拟提交
-			setTimeout(() => {
-				ElMessage.success('资源添加成功');
-				dialogVisible.value = false;
-				getResourceList();
+			try {
+				// 创建FormData对象用于文件上传
+				const formData = new FormData();
+				formData.append('name', resourceForm.name);
+				formData.append('categoryId', resourceForm.categoryId.toString());
+				formData.append('type', resourceForm.type);
+				formData.append('description', resourceForm.description || '');
+				formData.append('file', resourceForm.file);
+				
+				if (resourceForm.coverUrl && resourceForm.coverUrl.startsWith('data:')) {
+					// 将Base64转换为Blob
+					const coverBlob = await dataURLtoBlob(resourceForm.coverUrl);
+					formData.append('cover', coverBlob, 'cover.jpg');
+				}
+				
+				// 显示上传进度
+				ElMessage.info('文件上传中...');
+				
+				// 实际项目中，应调用后端API上传文件，例如：
+				// const res = await service.resource.upload(formData);
+				
+				// 模拟文件上传过程
+				setTimeout(async () => {
+					// 为新资源生成ID
+					let maxId = 0;
+					
+					if (resourceCache.value && Array.isArray(resourceCache.value)) {
+						const existingIds = resourceCache.value.map(item => item.id);
+						maxId = existingIds.length > 0 ? Math.max(...existingIds) : 0;
+					}
+					
+					const newId = maxId + 1;
+					
+					// 生成URL
+					let fileUrl = '#';
+					try {
+						// 创建资源URL
+						fileUrl = URL.createObjectURL(resourceForm.file);
+					} catch (e) {
+						console.error('创建URL失败:', e);
+						fileUrl = '#';
+					}
+					
+					// 构建新资源数据
+					const newResource = {
+						id: newId,
+						name: resourceForm.name,
+						description: resourceForm.description || `这是资源${newId}的详细描述`,
+						type: resourceForm.type,
+						categoryId: resourceForm.categoryId,
+						categoryName: categoryList.value.find(item => item.id === resourceForm.categoryId)?.name || '未分类',
+						url: fileUrl,
+						coverUrl: resourceForm.coverUrl || `https://picsum.photos/300/200?random=${newId}`,
+						viewCount: 0,
+						downloadCount: 0,
+						createTime: new Date().toISOString(),
+						author: user.info?.username || '当前用户',
+						fileSize: resourceForm.file ? resourceForm.file.size : 0,
+						fileName: resourceForm.file ? resourceForm.file.name : '',
+						selected: false,
+						realFile: true // 标记为真实文件
+					};
+					
+					console.log('添加真实资源:', newResource);
+					
+					// 将新资源添加到缓存
+					if (resourceCache.value && Array.isArray(resourceCache.value)) {
+						resourceCache.value = [newResource, ...resourceCache.value];
+					} else {
+						resourceCache.value = [newResource];
+					}
+					
+					// 关闭对话框
+					dialogVisible.value = false;
+					
+					// 重新加载资源列表
+					getResourceList();
+					
+					ElMessage.success('资源上传成功');
+					loading.value = false;
+				}, 1500);
+			} catch (err) {
+				console.error('添加资源失败:', err);
+				ElMessage.error('添加资源失败: ' + (err.message || '未知错误'));
 				loading.value = false;
-			}, 1000);
+			}
 		} else {
-			ElMessage.error('请完善表单信息');
+			ElMessage.warning('请完善表单信息');
 			return false;
 		}
 	});
 }
 
+// 将Base64转换为Blob对象
+function dataURLtoBlob(dataURL: string): Promise<Blob> {
+	return new Promise((resolve, reject) => {
+		try {
+			// 将base64分割为mime类型和数据部分
+			const arr = dataURL.split(',');
+			const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
+			const bstr = atob(arr[1]);
+			let n = bstr.length;
+			const u8arr = new Uint8Array(n);
+			
+			while (n--) {
+				u8arr[n] = bstr.charCodeAt(n);
+			}
+			
+			resolve(new Blob([u8arr], { type: mime }));
+		} catch (e) {
+			reject(e);
+		}
+	});
+}
+
+// 根据MIME类型判断文件类型
+function getFileTypeFromMime(mimeType: string): string {
+	if (!mimeType) return 'other';
+	
+	if (mimeType.startsWith('image/')) {
+		return 'image';
+	} else if (mimeType.startsWith('video/')) {
+		return 'video';
+	} else if (mimeType.startsWith('audio/')) {
+		return 'audio';
+	} else if (
+		mimeType.includes('pdf') || 
+		mimeType.includes('word') || 
+		mimeType.includes('document') || 
+		mimeType.includes('excel') || 
+		mimeType.includes('text/')
+	) {
+		return 'document';
+	} else if (
+		mimeType.includes('zip') || 
+		mimeType.includes('compressed') || 
+		mimeType.includes('archive') ||
+		mimeType.includes('rar')
+	) {
+		return 'archive';
+	}
+	return 'other';
+}
+
 // 生成模拟数据
 function generateMockData() {
 	// 检查是否已生成过资源数据
-	if (!resourceCache.value) {
+	if (!resourceCache.value || !Array.isArray(resourceCache.value)) {
 		// 首次生成数据
 		const resourceTypeValues = resourceTypes.value.map(item => item.value);
 		const allResources = [];
@@ -661,7 +864,7 @@ function generateMockData() {
 	}
 	
 	// 从缓存获取基础数据
-	const allResources = resourceCache.value || [];
+	const allResources = Array.isArray(resourceCache.value) ? resourceCache.value : [];
 	
 	// 获取已删除的资源ID
 	const deletedIds = deletedResourceIds.value || [];
@@ -777,43 +980,102 @@ function onPreviewResource(item: any) {
 			
 		case 'video':
 			// 视频预览
-			ElMessageBox.alert(
-				`<div style="text-align: center">
-					<video controls style="max-width: 100%; max-height: 500px;">
-						<source src="${item.url}" type="video/mp4">
-						您的浏览器不支持视频标签
-					</video>
-				</div>`,
-				'视频预览',
-				{
-					dangerouslyUseHTMLString: true,
-					showClose: true,
-					showCancelButton: false,
-					confirmButtonText: '关闭'
-				}
-			);
+			if (item.realFile && item.url && item.url !== '#') {
+				ElMessageBox.alert(
+					`<div style="text-align: center">
+						<video controls style="max-width: 100%; max-height: 500px;">
+							<source src="${item.url}" type="video/mp4">
+							您的浏览器不支持视频标签
+						</video>
+					</div>`,
+					'视频预览',
+					{
+						dangerouslyUseHTMLString: true,
+						showClose: true,
+						showCancelButton: false,
+						confirmButtonText: '关闭'
+					}
+				);
+			} else {
+				ElMessage.warning('此视频暂不支持在线预览，请下载后查看');
+			}
 			break;
 			
 		case 'audio':
 			// 音频预览
-			ElMessageBox.alert(
-				`<div style="text-align: center">
-					<audio controls style="width: 100%;">
-						<source src="${item.url}" type="audio/mpeg">
-						您的浏览器不支持音频标签
-					</audio>
-				</div>`,
-				'音频预览',
-				{
-					dangerouslyUseHTMLString: true,
-					showClose: true,
-					showCancelButton: false,
-					confirmButtonText: '关闭'
-				}
-			);
+			if (item.realFile && item.url && item.url !== '#') {
+				ElMessageBox.alert(
+					`<div style="text-align: center">
+						<audio controls style="width: 100%;">
+							<source src="${item.url}" type="audio/mpeg">
+							您的浏览器不支持音频标签
+						</audio>
+					</div>`,
+					'音频预览',
+					{
+						dangerouslyUseHTMLString: true,
+						showClose: true,
+						showCancelButton: false,
+						confirmButtonText: '关闭'
+					}
+				);
+			} else {
+				ElMessage.warning('此音频暂不支持在线预览，请下载后查看');
+			}
 			break;
 			
 		case 'document':
+			// 文档预览（PDF可以直接预览）
+			if (item.realFile && item.url && item.url !== '#' && item.fileName?.toLowerCase().endsWith('.pdf')) {
+				ElMessageBox.alert(
+					`<div style="text-align: center">
+						<iframe src="${item.url}" style="width: 100%; height: 500px; border: none;"></iframe>
+					</div>`,
+					'PDF预览',
+					{
+						dangerouslyUseHTMLString: true,
+						showClose: true,
+						showCancelButton: false,
+						confirmButtonText: '关闭',
+						customClass: 'pdf-preview-dialog'
+					}
+				);
+			} else {
+				// 显示资源信息
+				ElMessageBox.alert(
+					`<div>
+						<p><strong>资源名称：</strong>${item.name}</p>
+						<p><strong>资源类型：</strong>${getResourceTypeName(item.type)}</p>
+						<p><strong>资源大小：</strong>${formatFileSize(item.fileSize)}</p>
+						<p><strong>上传时间：</strong>${formatDate(item.createTime)}</p>
+						<p><strong>资源描述：</strong>${item.description || '暂无描述'}</p>
+						<div style="margin-top: 10px; text-align: center;">
+							<button onclick="window.parent.downloadResource(${item.id})" 
+									style="background-color: #409eff; border: none; color: white; padding: 8px 16px; 
+									border-radius: 4px; cursor: pointer;">
+								下载查看
+							</button>
+						</div>
+					</div>`,
+					'资源详情',
+					{
+						dangerouslyUseHTMLString: true,
+						showClose: true,
+						showCancelButton: false,
+						confirmButtonText: '关闭'
+					}
+				);
+				
+				// 定义全局下载函数
+				window.downloadResource = (id) => {
+					const resource = list.value.find(r => r.id === id);
+					if (resource) {
+						onDownloadResource(resource);
+					}
+				};
+			}
+			break;
+			
 		case 'archive':
 		default:
 			// 显示资源信息
@@ -845,13 +1107,13 @@ function onPreviewResource(item: any) {
 
 // 资源下载
 function onDownloadResource(item: any) {
-	// 模拟下载功能
-	if (item.url && item.url !== '#') {
-		// 创建一个临时链接
+	// 检查是否为真实文件
+	if (item.realFile && item.url && item.url !== '#') {
+		// 创建一个临时链接下载真实文件
 		const a = document.createElement('a');
 		a.style.display = 'none';
 		a.href = item.url;
-		a.download = item.name + getFileExtension(item.type);
+		a.download = item.fileName || (item.name + getFileExtension(item.type));
 		document.body.appendChild(a);
 		a.click();
 		document.body.removeChild(a);
@@ -1025,20 +1287,6 @@ function resetAllResources() {
 		flex-direction: column;
 		max-height: calc(100vh - 250px);
 		overflow-y: auto;
-		
-		.pagination-container {
-			padding: 10px 0;
-			margin-bottom: 10px;
-			
-			&.top {
-				position: sticky;
-				top: 0;
-				z-index: 10;
-				background-color: var(--el-bg-color);
-				box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-				border-radius: 4px;
-			}
-		}
 		
 		.resource-list {
 			margin: 0 -10px;
@@ -1222,6 +1470,29 @@ function resetAllResources() {
 			}
 		}
 	}
+	
+	.pagination-footer {
+		padding: 20px 0;
+		margin-top: 20px;
+		border-top: 1px solid var(--el-border-color-lighter);
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		
+		.pagination-info {
+			font-size: 14px;
+			color: var(--el-text-color-secondary);
+			
+			.total-count {
+				font-weight: 500;
+				color: var(--el-color-primary);
+			}
+		}
+		
+		.el-pagination {
+			margin-left: auto;
+		}
+	}
 }
 
 // 通用分页容器样式
@@ -1289,3 +1560,12 @@ function resetAllResources() {
 	}
 }
 </style>
+
+<script lang="ts">
+// 添加全局window.downloadResource接口
+declare global {
+	interface Window {
+		downloadResource: (id: number) => void;
+	}
+}
+</script>
