@@ -2,6 +2,9 @@ package com.cool.modules.user.service;
 
 import com.cool.core.base.BaseService;
 import com.cool.modules.user.entity.UserInfoEntity;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
 
 public interface UserInfoService extends BaseService<UserInfoEntity> {
     /**
@@ -25,4 +28,11 @@ public interface UserInfoService extends BaseService<UserInfoEntity> {
      * 绑定手机号
      */
     void bindPhone(Long currentUserId, String phone, String code);
+    
+    /**
+     * 批量导入用户
+     * @param file Excel文件
+     * @return 导入结果信息
+     */
+    List<UserInfoEntity> importUsers(MultipartFile file);
 }

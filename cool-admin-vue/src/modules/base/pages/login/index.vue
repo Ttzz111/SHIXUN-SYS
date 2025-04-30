@@ -57,6 +57,9 @@
 						<el-button type="primary" :loading="saving" @click="toLogin">
 							{{ $t('登录') }}
 						</el-button>
+						<el-button @click="toRegister">
+							{{ $t('注册') }}
+						</el-button>
 					</div>
 				</el-form>
 			</div>
@@ -146,6 +149,11 @@ async function toLogin() {
 	}
 
 	saving.value = false;
+}
+
+// 跳转注册页面
+function toRegister() {
+	router.push('/register');
 }
 </script>
 

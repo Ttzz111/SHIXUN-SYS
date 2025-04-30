@@ -14,6 +14,15 @@
 					<cl-add-btn />
 					<!-- 批量删除按钮 -->
 					<cl-multi-delete-btn />
+					<!-- 批量导入按钮 -->
+					<el-button
+						v-permission="service.base.sys.user.permission.add"
+						type="primary"
+						@click="openImportDialog"
+					>
+						<el-icon><upload-filled /></el-icon>
+						{{ $t('批量导入') }}
+					</el-button>
 					<!-- 用户转移 -->
 					<el-button
 						v-permission="service.base.sys.user.permission.move"
@@ -52,6 +61,56 @@
 
 				<!-- 移动 -->
 				<user-move :ref="setRefs('userMove')" />
+				
+				<!-- 批量导入对话框 -->
+				<el-dialog v-model="importDialogVisible" :title="t('批量导入用户')" width="500px">
+					<el-upload
+						class="upload-demo"
+						drag
+						:action="uploadUrl"
+						:headers="{ Authorization: user.token }"
+						:before-upload="beforeUpload"
+						:on-success="handleImportSuccess"
+						:on-error="handleImportError"
+						accept=".xlsx, .xls"
+					>
+						<el-icon class="el-icon--upload">
+							<upload-filled />
+						</el-icon>
+						<div class="el-upload__text">
+							{{ t('拖拽文件到此处或') }} <em>{{ t('点击上传') }}</em>
+						</div>
+						<template #tip>
+							<div class="el-upload__tip">
+								{{ t('请上传Excel文件，仅支持.xlsx、.xls格式') }}
+							</div>
+						</template>
+					</el-upload>
+					
+					<div class="import-instruction">
+						<p>{{ t('Excel表格必须包含以下列：') }}</p>
+						<ul>
+							<li>{{ t('用户名') }} <span class="required">*</span> {{ t('(必填)') }}</li>
+							<li>{{ t('姓名') }} <span class="required">*</span> {{ t('(必填)') }}</li>
+							<li>{{ t('昵称') }} <span class="required">*</span> {{ t('(必填)') }}</li>
+							<li>{{ t('手机号码') }}</li>
+							<li>{{ t('邮箱') }}</li>
+							<li>{{ t('密码') }} {{ t('(默认123456)') }}</li>
+							<li>{{ t('状态') }} {{ t('(0-禁用,1-启用，默认为1)') }}</li>
+							<li>{{ t('备注') }}</li>
+						</ul>
+						<div class="tip">{{ t('提示：请先下载模板填写数据，然后上传。导入的用户默认分配到当前选中的部门。') }}</div>
+					</div>
+
+					<template #footer>
+						<span class="dialog-footer">
+							<el-button @click="importDialogVisible = false">{{ t('取消') }}</el-button>
+							<el-button type="primary" @click="downloadImportTemplate">
+								{{ t('下载模板') }}
+							</el-button>
+						</span>
+					</template>
+				</el-dialog>
 			</cl-crud>
 		</template>
 	</cl-view-group>
@@ -69,9 +128,76 @@ import UserMove from './components/user-move.vue';
 import { useViewGroup } from '/@/plugins/view';
 import { useI18n } from 'vue-i18n';
 import { Plugins } from '/#/crud';
+import { ref, computed } from 'vue';
+import { ElMessage } from 'element-plus';
+import { UploadFilled } from '@element-plus/icons-vue';
+import { config } from '/@/config';
+import { useBase } from '/$/base';
 
 const { service, refs, setRefs } = useCool();
 const { t } = useI18n();
+const { user } = useBase();
+
+// API基础URL
+const apiBaseUrl = import.meta.env.VITE_API_URL || config.baseUrl || '';
+
+// 导入对话框
+const importDialogVisible = ref(false);
+
+// 上传URL
+const uploadUrl = computed(() => {
+	return `${service.baseUrl}/admin/base/sys/user/importUsers?departmentId=${ViewGroup.value?.selected?.id || ''}`;
+});
+
+// 打开导入对话框
+function openImportDialog() {
+	// 检查是否选择了部门
+	if (!ViewGroup.value?.selected?.id) {
+		ElMessage.warning(t('请先选择一个部门!'));
+		return;
+	}
+	importDialogVisible.value = true;
+}
+
+// 上传前验证
+function beforeUpload(file) {
+	const isExcel = 
+		file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || 
+		file.type === 'application/vnd.ms-excel';
+	
+	if (!isExcel) {
+		ElMessage.error(t('请上传Excel文件!'));
+		return false;
+	}
+	
+	return true;
+}
+
+// 上传成功处理
+function handleImportSuccess(res) {
+	if (res.code === 1000) {
+		ElMessage.success(t('导入成功!'));
+		importDialogVisible.value = false;
+		// 刷新表格数据
+		Crud.value?.refresh();
+	} else {
+		ElMessage.error(t(res.message) || t('导入失败!'));
+	}
+}
+
+// 上传失败处理
+function handleImportError(error) {
+	console.error('上传失败:', error);
+	ElMessage.error(t('上传失败，请稍后重试!'));
+}
+
+// 下载导入模板
+function downloadImportTemplate() {
+	const url = `${service.baseUrl}/admin/base/sys/user/downloadTemplate`;
+	
+	// 使用service层的内置下载方法（会自动处理token和错误）
+	service.download(url, 'user_import_template.xls');
+}
 
 const { ViewGroup } = useViewGroup({
 	title: t('用户列表')
@@ -340,3 +466,64 @@ async function toMove(item?: Eps.BaseSysDepartmentEntity) {
 	refs.userMove.open(ids);
 }
 </script>
+
+<style lang="scss" scoped>
+.dialog-footer {
+	display: flex;
+	justify-content: flex-end;
+	margin-top: 10px;
+	
+	.el-button {
+		margin-left: 10px;
+	}
+}
+
+.import-instruction {
+	margin-top: 20px;
+	text-align: left;
+	padding: 10px;
+	background-color: var(--el-fill-color-light);
+	border-radius: 4px;
+	font-size: 14px;
+	
+	p {
+		margin-bottom: 8px;
+		font-weight: bold;
+	}
+	
+	ul {
+		margin: 0;
+		padding-left: 20px;
+		
+		li {
+			margin-bottom: 5px;
+		}
+	}
+	
+	.required {
+		color: var(--el-color-danger);
+		margin-right: 2px;
+	}
+	
+	.tip {
+		margin-top: 10px;
+		color: var(--el-text-color-secondary);
+		font-size: 13px;
+		line-height: 1.4;
+		padding: 8px;
+		border-radius: 4px;
+		background-color: var(--el-color-info-light);
+	}
+}
+
+.upload-demo {
+	.el-upload {
+		width: 100%;
+	}
+	
+	.el-upload-dragger {
+		width: 100%;
+	}
+}
+</style>
+

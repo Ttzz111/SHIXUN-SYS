@@ -68,6 +68,24 @@
 					</el-tag>
 				</div>
 			</div>
+			
+			<!-- 子分类筛选 -->
+			<div class="filter-item" v-if="categoryId !== 0">
+				<span class="filter-label">子分类：</span>
+				<div class="filter-options">
+					<el-tag
+						v-for="item in filteredSubcategories"
+						:key="item.id"
+						:effect="subCategoryId === item.id ? 'dark' : 'plain'"
+						@click="onSubCategorySelect(item.id)"
+						class="category-tag"
+						:class="{'active': subCategoryId === item.id}"
+					>
+						{{ item.name }}
+					</el-tag>
+				</div>
+			</div>
+			
 			<div class="filter-item">
 				<span class="filter-label">资源类型：</span>
 				<div class="filter-options">
@@ -199,18 +217,24 @@
 			<el-form-item label="资源名称" prop="name">
 				<el-input v-model="resourceForm.name" placeholder="请输入资源名称"></el-input>
 			</el-form-item>
+			
 			<el-form-item label="资源分类" prop="categoryId">
-				<el-select v-model="resourceForm.categoryId" placeholder="请选择资源分类" style="width: 100%">
-					<el-option
-						v-for="item in categoryList"
-						:key="item.id"
-						:label="item.name"
-						:value="item.id"
-					></el-option>
-				</el-select>
+				<el-cascader
+					v-model="resourceForm.categoryId"
+					:options="categoryOptions"
+					:props="{
+						checkStrictly: true,
+						label: 'name',
+						value: 'id',
+						emitPath: false
+					}"
+					placeholder="请选择资源分类"
+					clearable
+				></el-cascader>
 			</el-form-item>
+			
 			<el-form-item label="资源类型" prop="type">
-				<el-select v-model="resourceForm.type" placeholder="请选择资源类型" style="width: 100%">
+				<el-select v-model="resourceForm.type" placeholder="请选择资源类型" style="width: 100%;">
 					<el-option
 						v-for="item in resourceTypes"
 						:key="item.value"
@@ -219,51 +243,67 @@
 					></el-option>
 				</el-select>
 			</el-form-item>
-			<el-form-item label="资源描述">
-				<el-input v-model="resourceForm.description" type="textarea" rows="3" placeholder="请输入资源描述"></el-input>
+			
+			<el-form-item label="资源描述" prop="description">
+				<el-input 
+					v-model="resourceForm.description" 
+					type="textarea" 
+					:rows="3" 
+					placeholder="请输入资源描述"
+				></el-input>
 			</el-form-item>
-			<el-form-item label="资源文件" prop="file">
+			
+			<el-form-item label="上传文件" prop="file">
 				<el-upload
-					class="resource-upload"
+					class="upload-demo"
 					drag
 					action="#"
+					:http-request="handleUpload"
 					:auto-upload="false"
 					:limit="1"
+					:on-exceed="handleExceed"
 					:on-change="handleFileChange"
+					:file-list="fileList"
 				>
-					<el-icon class="el-icon--upload"><upload-filled /></el-icon>
-					<div class="el-upload__text">拖拽文件到此处 或 <em>点击上传</em></div>
+					<el-icon class="el-icon--upload">
+						<upload-filled />
+					</el-icon>
+					<div class="el-upload__text">
+						拖拽文件到此处或 <em>点击上传</em>
+					</div>
 					<template #tip>
 						<div class="el-upload__tip">
-							请上传资源文件，大小不超过50MB
+							提示：支持各种格式的文件，大小不超过100MB
 						</div>
 					</template>
 				</el-upload>
 			</el-form-item>
-			<el-form-item label="资源封面">
-				<el-upload
-					class="cover-uploader"
-					action="#"
-					:show-file-list="false"
-					:auto-upload="false"
-					:on-change="handleCoverChange"
-				>
-					<div class="cover-preview">
-						<img v-if="resourceForm.coverUrl" :src="resourceForm.coverUrl" class="avatar" />
-						<div v-else class="cover-placeholder">
-							<el-icon><plus /></el-icon>
-							<span>上传封面</span>
-						</div>
-					</div>
-				</el-upload>
-			</el-form-item>
 		</el-form>
+		
 		<template #footer>
 			<span class="dialog-footer">
 				<el-button @click="dialogVisible = false">取消</el-button>
-				<el-button type="primary" @click="submitResourceForm">提交</el-button>
+				<el-button type="primary" @click="submitResourceForm" :loading="submitting">
+					确认
+				</el-button>
 			</span>
 		</template>
+	</el-dialog>
+	
+	<!-- 视频预览对话框 -->
+	<el-dialog
+		v-model="videoPreviewDialog"
+		title="视频预览"
+		width="800px"
+		destroy-on-close
+		center
+	>
+		<div class="video-container">
+			<video controls style="width: 100%;">
+				<source :src="currentVideoUrl" type="video/mp4">
+				您的浏览器不支持视频标签
+			</video>
+		</div>
 	</el-dialog>
 </template>
 
@@ -313,6 +353,7 @@ const search = reactive({
 
 // 分类筛选
 const categoryId = ref(0);
+const subCategoryId = ref(0);
 const resourceType = ref('');
 
 // 分页信息
@@ -329,22 +370,29 @@ const loading = ref(false);
 const list = ref<any[]>([]);
 
 // 资源分类列表
-const categoryList = ref<any[]>([
-	{ id: 1, name: '教学文档' },
-	{ id: 2, name: '实训资料' },
-	{ id: 3, name: '案例分析' },
-	{ id: 4, name: '开发工具' },
-	{ id: 5, name: '参考代码' }
+const categoryList = ref([
+	{ id: 1, name: '劳动基本技能', parentId: 0, icon: 'tools' },
+	{ id: 2, name: '体验式劳动教育', parentId: 0, icon: 'discover' },
+	{ id: 3, name: '虚拟实训体验', parentId: 0, icon: 'virtual' },
+]);
+
+const subcategories = ref([
+	{ id: 101, name: '工程训练IA', parentId: 1 },
+	{ id: 102, name: '工程训练II', parentId: 1 },
+	{ id: 103, name: '工程训练III', parentId: 1 },
+	{ id: 104, name: '工程训练IV', parentId: 1 },
+	{ id: 105, name: '工程认知训练', parentId: 1 },
+	{ id: 201, name: '陶艺制作与体验', parentId: 2 },
+	{ id: 202, name: '激光加工创新训练', parentId: 2 },
+	{ id: 203, name: '精工细铸创新实践', parentId: 2 },
+	{ id: 301, name: '虚拟仿真设备VR使用学习', parentId: 3 },
 ]);
 
 // 资源类型
 const resourceTypes = ref([
-	{ label: '文档', value: 'document' },
-	{ label: '视频', value: 'video' },
-	{ label: '图片', value: 'image' },
-	{ label: '音频', value: 'audio' },
-	{ label: '压缩包', value: 'archive' },
-	{ label: '其他', value: 'other' }
+	{ label: '文档', value: 'document', icon: 'document' },
+	{ label: '图片', value: 'image', icon: 'picture' },
+	{ label: '视频', value: 'video', icon: 'film' },
 ]);
 
 // 对话框相关
@@ -352,11 +400,11 @@ const dialogVisible = ref(false);
 const formRef = ref<FormInstance>();
 const resourceForm = reactive({
 	name: '',
-	categoryId: undefined,
-	type: '',
 	description: '',
-	file: null as File | null,
-	coverUrl: ''
+	type: 'document',
+	categoryId: null,
+	coverUrl: '',
+	file: null
 });
 
 // 表单验证规则
@@ -494,6 +542,7 @@ function onSearch() {
 // 覆盖原有的选择分类方法
 function onCategorySelect(id: number) {
 	categoryId.value = id;
+	subCategoryId.value = 0; // 重置子分类选择
 	page.currentPage = 1;
 	getResourceList();
 	savePageState();
@@ -961,147 +1010,20 @@ function formatDate(date: string) {
 
 // 资源预览
 function onPreviewResource(item: any) {
-	// 根据资源类型选择不同的预览方式
-	switch(item.type) {
-		case 'image':
-			// 图片预览
-			const imgUrl = item.url || item.coverUrl;
-			ElMessageBox.alert(
-				`<div style="text-align: center"><img src="${imgUrl}" style="max-width: 100%; max-height: 500px;" /></div>`,
-				'图片预览',
-				{
-					dangerouslyUseHTMLString: true,
-					showClose: true,
-					showCancelButton: false,
-					confirmButtonText: '关闭'
-				}
-			);
-			break;
-			
-		case 'video':
-			// 视频预览
-			if (item.realFile && item.url && item.url !== '#') {
-				ElMessageBox.alert(
-					`<div style="text-align: center">
-						<video controls style="max-width: 100%; max-height: 500px;">
-							<source src="${item.url}" type="video/mp4">
-							您的浏览器不支持视频标签
-						</video>
-					</div>`,
-					'视频预览',
-					{
-						dangerouslyUseHTMLString: true,
-						showClose: true,
-						showCancelButton: false,
-						confirmButtonText: '关闭'
-					}
-				);
-			} else {
-				ElMessage.warning('此视频暂不支持在线预览，请下载后查看');
-			}
-			break;
-			
-		case 'audio':
-			// 音频预览
-			if (item.realFile && item.url && item.url !== '#') {
-				ElMessageBox.alert(
-					`<div style="text-align: center">
-						<audio controls style="width: 100%;">
-							<source src="${item.url}" type="audio/mpeg">
-							您的浏览器不支持音频标签
-						</audio>
-					</div>`,
-					'音频预览',
-					{
-						dangerouslyUseHTMLString: true,
-						showClose: true,
-						showCancelButton: false,
-						confirmButtonText: '关闭'
-					}
-				);
-			} else {
-				ElMessage.warning('此音频暂不支持在线预览，请下载后查看');
-			}
-			break;
-			
-		case 'document':
-			// 文档预览（PDF可以直接预览）
-			if (item.realFile && item.url && item.url !== '#' && item.fileName?.toLowerCase().endsWith('.pdf')) {
-				ElMessageBox.alert(
-					`<div style="text-align: center">
-						<iframe src="${item.url}" style="width: 100%; height: 500px; border: none;"></iframe>
-					</div>`,
-					'PDF预览',
-					{
-						dangerouslyUseHTMLString: true,
-						showClose: true,
-						showCancelButton: false,
-						confirmButtonText: '关闭',
-						customClass: 'pdf-preview-dialog'
-					}
-				);
-			} else {
-				// 显示资源信息
-				ElMessageBox.alert(
-					`<div>
-						<p><strong>资源名称：</strong>${item.name}</p>
-						<p><strong>资源类型：</strong>${getResourceTypeName(item.type)}</p>
-						<p><strong>资源大小：</strong>${formatFileSize(item.fileSize)}</p>
-						<p><strong>上传时间：</strong>${formatDate(item.createTime)}</p>
-						<p><strong>资源描述：</strong>${item.description || '暂无描述'}</p>
-						<div style="margin-top: 10px; text-align: center;">
-							<button onclick="window.parent.downloadResource(${item.id})" 
-									style="background-color: #409eff; border: none; color: white; padding: 8px 16px; 
-									border-radius: 4px; cursor: pointer;">
-								下载查看
-							</button>
-						</div>
-					</div>`,
-					'资源详情',
-					{
-						dangerouslyUseHTMLString: true,
-						showClose: true,
-						showCancelButton: false,
-						confirmButtonText: '关闭'
-					}
-				);
-				
-				// 定义全局下载函数
-				window.downloadResource = (id) => {
-					const resource = list.value.find(r => r.id === id);
-					if (resource) {
-						onDownloadResource(resource);
-					}
-				};
-			}
-			break;
-			
-		case 'archive':
-		default:
-			// 显示资源信息
-			ElMessageBox.alert(
-				`<div>
-					<p><strong>资源名称：</strong>${item.name}</p>
-					<p><strong>资源类型：</strong>${getResourceTypeName(item.type)}</p>
-					<p><strong>资源大小：</strong>${formatFileSize(item.fileSize)}</p>
-					<p><strong>上传时间：</strong>${formatDate(item.createTime)}</p>
-					<p><strong>资源描述：</strong>${item.description || '暂无描述'}</p>
-				</div>`,
-				'资源预览',
-				{
-					dangerouslyUseHTMLString: true,
-					showClose: true,
-					showCancelButton: false,
-					confirmButtonText: '关闭'
-				}
-			);
-			break;
-	}
-	
-	// 更新查看次数
-	if (!item._viewed) {
-		item.viewCount = (item.viewCount || 0) + 1;
-		item._viewed = true;
+	if (item.type === 'video') {
+		// 视频预览
+		currentVideoUrl.value = item.url;
+		videoPreviewDialog.value = true;
+	} else if (item.type === 'image') {
+		// 图片预览
+		ElMessageBox.alert('<img src="' + item.coverUrl + '" style="max-width:100%;" />', '图片预览', {
+			dangerouslyUseHTMLString: true,
+			showConfirmButton: false,
+			callback: () => {}
+		});
+	} else {
+		// 其他类型，使用新窗口打开
+		window.open(item.url, '_blank');
 	}
 }
 
@@ -1216,154 +1138,464 @@ function resetAllResources() {
 		ElMessage.info('已取消操作');
 	});
 }
+
+// 模拟资源列表数据
+const allResources = [
+	{
+		id: 1,
+		name: '工程训练IA基础教程',
+		type: 'document',
+		categoryId: 101,
+		url: 'https://example.com/doc1',
+		coverUrl: 'https://picsum.photos/300/200?random=1',
+		description: '工程训练IA的基础理论与实践指导文档',
+		viewCount: 245,
+		downloadCount: 120,
+		author: '张教授',
+		createTime: '2025-04-15T10:30:00',
+		fileSize: 15360,
+		selected: false
+	},
+	{
+		id: 2,
+		name: '激光加工实训视频教程',
+		type: 'video',
+		categoryId: 202,
+		url: 'https://example.com/video1',
+		coverUrl: 'https://picsum.photos/300/200?random=2',
+		description: '激光加工基本操作与安全规范详细视频教程',
+		viewCount: 562,
+		downloadCount: 210,
+		author: '李教授',
+		createTime: '2025-04-15T14:25:00',
+		fileSize: 512000,
+		selected: false
+	},
+	{
+		id: 3,
+		name: '工程训练II学习指南',
+		type: 'document',
+		categoryId: 102,
+		url: 'https://example.com/doc2',
+		coverUrl: 'https://picsum.photos/300/200?random=3',
+		description: '工程训练II的核心概念与实践方法总结',
+		viewCount: 321,
+		downloadCount: 180,
+		author: '王教授',
+		createTime: '2023-08-05T09:15:00',
+		fileSize: 8192,
+		selected: false
+	},
+	{
+		id: 4,
+		name: '陶艺制作流程图解',
+		type: 'image',
+		categoryId: 201,
+		url: 'https://example.com/image1',
+		coverUrl: 'https://picsum.photos/300/200?random=4',
+		description: '陶艺制作全流程高清图解与要点说明',
+		viewCount: 410,
+		downloadCount: 195,
+		author: '刘老师',
+		createTime: '2023-07-22T16:40:00',
+		fileSize: 25600,
+		selected: false
+	},
+	{
+		id: 5,
+		name: 'VR设备操作视频教程',
+		type: 'video',
+		categoryId: 301,
+		url: 'https://example.com/video2',
+		coverUrl: 'https://picsum.photos/300/200?random=5',
+		description: '虚拟仿真设备的操作方法与注意事项',
+		viewCount: 628,
+		downloadCount: 315,
+		author: '赵教授',
+		createTime: '2023-08-10T11:20:00',
+		fileSize: 768000,
+		selected: false
+	},
+	{
+		id: 6,
+		name: '工程认知训练手册',
+		type: 'document',
+		categoryId: 105,
+		url: 'https://example.com/doc3',
+		coverUrl: 'https://picsum.photos/300/200?random=6',
+		description: '工程认知训练完整教学手册与案例分析',
+		viewCount: 275,
+		downloadCount: 142,
+		author: '陈教授',
+		createTime: '2023-06-30T13:50:00',
+		fileSize: 12288,
+		selected: false
+	},
+	{
+		id: 7,
+		name: '精工细铸工艺流程',
+		type: 'document',
+		categoryId: 203,
+		url: 'https://example.com/doc4',
+		coverUrl: 'https://picsum.photos/300/200?random=7',
+		description: '精密铸造工艺的理论基础与实践指导',
+		viewCount: 342,
+		downloadCount: 160,
+		author: '马教授',
+		createTime: '2023-07-29T15:10:00',
+		fileSize: 10240,
+		selected: false
+	},
+	{
+		id: 8,
+		name: '工程训练III实验照片集',
+		type: 'image',
+		categoryId: 103,
+		url: 'https://example.com/image2',
+		coverUrl: 'https://picsum.photos/300/200?random=8',
+		description: '工程训练III各类实验的高清照片与说明',
+		viewCount: 198,
+		downloadCount: 87,
+		author: '杨老师',
+		createTime: '2023-08-12T10:30:00',
+		fileSize: 51200,
+		selected: false
+	},
+	{
+		id: 9,
+		name: '工程训练IV综合实训视频',
+		type: 'video',
+		categoryId: 104,
+		url: 'https://example.com/video3',
+		coverUrl: 'https://picsum.photos/300/200?random=9',
+		description: '工程训练IV阶段综合能力培养实训过程',
+		viewCount: 435,
+		downloadCount: 210,
+		author: '周教授',
+		createTime: '2023-08-03T14:20:00',
+		fileSize: 614400,
+		selected: false
+	},
+	{
+		id: 10,
+		name: '激光加工设备使用手册',
+		type: 'document',
+		categoryId: 202,
+		url: 'https://example.com/doc5',
+		coverUrl: 'https://picsum.photos/300/200?random=10',
+		description: '激光加工设备的使用方法与维护知识',
+		viewCount: 382,
+		downloadCount: 175,
+		author: '黄教授',
+		createTime: '2023-07-18T09:45:00',
+		fileSize: 9216,
+		selected: false
+	},
+	{
+		id: 11,
+		name: 'VR设备实训实景图',
+		type: 'image',
+		categoryId: 301,
+		url: 'https://example.com/image3',
+		coverUrl: 'https://picsum.photos/300/200?random=11',
+		description: '虚拟仿真实训环境与设备高清图片',
+		viewCount: 218,
+		downloadCount: 94,
+		author: '吴老师',
+		createTime: '2023-08-14T16:35:00',
+		fileSize: 30720,
+		selected: false
+	},
+	{
+		id: 12,
+		name: '陶艺作品展示视频',
+		type: 'video',
+		categoryId: 201,
+		url: 'https://example.com/video4',
+		coverUrl: 'https://picsum.photos/300/200?random=12',
+		description: '学生陶艺作品展示与制作过程回顾',
+		viewCount: 372,
+		downloadCount: 125,
+		author: '郑老师',
+		createTime: '2023-08-01T11:25:00',
+		fileSize: 409600,
+		selected: false
+	},
+];
+
+// 加载数据
+const loadData = () => {
+	loading.value = true;
+	
+	// 模拟API请求延迟
+	setTimeout(() => {
+		// 应用分类和类型过滤
+		let filteredData = [...allResources];
+		
+		// 按分类筛选
+		if (categoryId.value !== 0) {
+			const targetCategory = categoryList.value.find(c => c.id === categoryId.value);
+			if (targetCategory) {
+				// 获取该分类下的所有子分类
+				const subCats = subcategories.value.filter(s => s.parentId === targetCategory.id);
+				const subCatIds = subCats.map(s => s.id);
+				filteredData = filteredData.filter(r => subCatIds.includes(r.categoryId));
+			}
+		}
+		
+		// 按类型筛选
+		if (resourceType.value) {
+			filteredData = filteredData.filter(r => r.type === resourceType.value);
+		}
+		
+		// 关键字搜索
+		if (search.keyword) {
+			const keyword = search.keyword.toLowerCase();
+			filteredData = filteredData.filter(r => 
+				r.name.toLowerCase().includes(keyword) || 
+				(r.description && r.description.toLowerCase().includes(keyword))
+			);
+		}
+		
+		// 更新分页信息
+		page.total = filteredData.length;
+		
+		// 分页处理
+		const startIndex = (page.currentPage - 1) * page.pageSize;
+		const endIndex = startIndex + page.pageSize;
+		list.value = filteredData.slice(startIndex, endIndex);
+		
+		loading.value = false;
+	}, 500);
+};
+
+// 获取资源分类名称
+const getResourceCategoryName = (categoryId) => {
+	const subCategory = subcategories.value.find(c => c.id === categoryId);
+	if (subCategory) {
+		const parentCategory = categoryList.value.find(c => c.id === subCategory.parentId);
+		return `${parentCategory ? parentCategory.name + ' - ' : ''}${subCategory.name}`;
+	}
+	return '未分类';
+};
+
+// 计算过滤后的子分类
+const filteredSubcategories = computed(() => {
+	if (categoryId.value === 0) return [];
+	return subcategories.value.filter(item => item.parentId === categoryId.value);
+});
+
+// 选择子分类
+const onSubCategorySelect = (id) => {
+	subCategoryId.value = id;
+	// 根据选择的子分类进行过滤
+	if (id === 0) {
+		loadData();
+		return;
+	}
+	
+	loading.value = true;
+	// 模拟API请求延迟
+	setTimeout(() => {
+		// 应用分类和类型过滤
+		let filteredData = [...allResources];
+		
+		// 按子分类筛选
+		filteredData = filteredData.filter(r => r.categoryId === id);
+		
+		// 按类型筛选
+		if (resourceType.value) {
+			filteredData = filteredData.filter(r => r.type === resourceType.value);
+		}
+		
+		// 关键字搜索
+		if (search.keyword) {
+			const keyword = search.keyword.toLowerCase();
+			filteredData = filteredData.filter(r => 
+				r.name.toLowerCase().includes(keyword) || 
+				(r.description && r.description.toLowerCase().includes(keyword))
+			);
+		}
+		
+		// 更新分页信息
+		page.total = filteredData.length;
+		
+		// 分页处理
+		const startIndex = (page.currentPage - 1) * page.pageSize;
+		const endIndex = startIndex + page.pageSize;
+		list.value = filteredData.slice(startIndex, endIndex);
+		
+		loading.value = false;
+	}, 500);
+};
+
+// 视频预览对话框
+const videoPreviewDialog = ref(false);
+const currentVideoUrl = ref('');
+
+// 构建分类选项层级结构
+const categoryOptions = computed(() => {
+	return categoryList.value.map(category => {
+		const children = subcategories.value
+			.filter(sub => sub.parentId === category.id)
+			.map(sub => ({
+				id: sub.id,
+				name: sub.name,
+				parentId: sub.parentId
+			}));
+			
+		return {
+			id: category.id,
+			name: category.name,
+			children
+		};
+	});
+});
+
+// 获取资源分类名称
+const getCategoryName = (id) => {
+	const subcat = subcategories.value.find(c => c.id === id);
+	if (!subcat) return '未分类';
+	
+	const maincat = categoryList.value.find(c => c.id === subcat.parentId);
+	if (!maincat) return subcat.name;
+	
+	return `${maincat.name} - ${subcat.name}`;
+};
 </script>
 
 <style lang="scss" scoped>
 .resource-category {
-	min-height: calc(100vh - 150px);
-	position: relative;
-	display: flex;
-	flex-direction: column;
-
+	padding: 20px;
+	
 	.search-box {
-		width: 280px;
+		display: flex;
+		align-items: center;
 		
 		.search-input {
-			:deep(.el-input__wrapper) {
-				box-shadow: 0 0 0 1px var(--el-border-color) inset;
-			}
+			width: 300px;
 		}
 	}
-
+	
 	.filter-container {
-		margin: 15px 0;
-		background-color: var(--el-fill-color-light);
-		border-radius: 4px;
-		padding: 16px 20px;
+		margin: 20px 0;
+		background-color: var(--el-bg-color);
+		border-radius: 8px;
+		padding: 15px;
 		box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
-
+		
 		.filter-item {
 			margin-bottom: 12px;
-			display: flex;
-			align-items: flex-start;
-
+			
 			&:last-child {
 				margin-bottom: 0;
 			}
-
-			.filter-label {
-				font-weight: 500;
-				width: 90px;
-				flex-shrink: 0;
-				line-height: 32px;
-				color: var(--el-text-color-secondary);
-			}
-
-			.filter-options {
-				flex: 1;
-				display: flex;
-				flex-wrap: wrap;
-				gap: 8px;
-
-				.category-tag {
-					cursor: pointer;
-					transition: all 0.3s;
-					
-					&.active {
-						transform: scale(1.05);
-					}
-					
-					&:hover {
-						transform: translateY(-2px);
-					}
-				}
+		}
+		
+		.filter-label {
+			display: inline-block;
+			font-weight: bold;
+			color: var(--el-text-color-primary);
+			margin-right: 10px;
+			vertical-align: middle;
+		}
+		
+		.filter-options {
+			display: inline-block;
+			vertical-align: middle;
+		}
+		
+		.category-tag {
+			margin-right: 10px;
+			margin-bottom: 5px;
+			cursor: pointer;
+			transition: all 0.3s;
+			
+			&.active {
+				transform: scale(1.05);
 			}
 		}
 	}
-
+	
 	.resource-list-container {
-		flex: 1;
-		display: flex;
-		flex-direction: column;
-		max-height: calc(100vh - 250px);
-		overflow-y: auto;
+		min-height: 400px;
 		
 		.resource-list {
-			margin: 0 -10px;
-			
-			.el-col {
-				padding: 10px;
-			}
+			margin-bottom: 20px;
 		}
 		
 		.resource-card {
-			height: 100%;
+			margin-bottom: 20px;
 			transition: all 0.3s;
-			border-radius: 8px;
-			overflow: hidden;
+			position: relative;
+			border: 2px solid transparent;
 			
 			&:hover {
 				transform: translateY(-5px);
-				box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+				box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
 				
-				.resource-cover {
-					.resource-hover-info {
-						opacity: 1;
-					}
-					
-					img {
-						transform: scale(1.05);
-					}
+				.resource-hover-info {
+					opacity: 1;
 				}
 			}
 			
 			&.is-selected {
-				border: 2px solid var(--el-color-primary);
+				border-color: var(--el-color-primary);
+				
+				.selection-mark {
+					.el-checkbox {
+						opacity: 1;
+					}
+				}
 			}
 			
 			.resource-cover {
-				position: relative;
 				height: 160px;
+				position: relative;
 				overflow: hidden;
-				cursor: pointer;
 				
 				img {
 					width: 100%;
 					height: 100%;
 					object-fit: cover;
-					transition: transform 0.3s;
+					transition: transform 0.5s;
+				}
+				
+				&:hover img {
+					transform: scale(1.05);
 				}
 				
 				.resource-type {
 					position: absolute;
-					top: 0;
-					right: 0;
-					background-color: var(--el-color-info);
-					color: #fff;
-					padding: 4px 10px;
+					top: 10px;
+					right: 10px;
+					padding: 3px 8px;
+					border-radius: 4px;
 					font-size: 12px;
-					border-bottom-left-radius: 8px;
-					font-weight: 500;
-					z-index: 2;
+					color: #fff;
 					
 					&.type-document {
-						background-color: var(--el-color-primary);
+						background-color: #409eff;
 					}
 					
 					&.type-video {
-						background-color: var(--el-color-danger);
+						background-color: #67c23a;
 					}
 					
 					&.type-image {
-						background-color: var(--el-color-success);
+						background-color: #e6a23c;
 					}
 					
 					&.type-audio {
-						background-color: var(--el-color-warning);
+						background-color: #f56c6c;
 					}
 					
 					&.type-archive {
-						background-color: var(--el-color-info);
+						background-color: #909399;
+					}
+					
+					&.type-other {
+						background-color: #909399;
 					}
 				}
 				
@@ -1373,9 +1605,12 @@ function resetAllResources() {
 					left: 10px;
 					z-index: 2;
 					
-					:deep(.el-checkbox__inner) {
-						border-color: #fff;
-						background-color: rgba(255, 255, 255, 0.3);
+					.el-checkbox {
+						background-color: rgba(255, 255, 255, 0.8);
+						border-radius: 4px;
+						padding: 2px;
+						opacity: 0.6;
+						transition: opacity 0.3s;
 					}
 				}
 				
@@ -1384,25 +1619,25 @@ function resetAllResources() {
 					bottom: 0;
 					left: 0;
 					right: 0;
-					background: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent);
-					padding: 15px 10px 8px;
+					background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);
+					padding: 10px;
 					opacity: 0;
 					transition: opacity 0.3s;
-					z-index: 1;
 					
 					.hover-stats {
 						display: flex;
-						justify-content: space-between;
+						justify-content: flex-end;
 						
 						.stat-item {
 							color: #fff;
+							margin-left: 15px;
+							font-size: 14px;
 							display: flex;
 							align-items: center;
-							font-size: 12px;
 							
 							.el-icon {
-								margin-right: 4px;
-								font-size: 14px;
+								margin-right: 5px;
+								font-size: 16px;
 							}
 						}
 					}
@@ -1410,23 +1645,23 @@ function resetAllResources() {
 			}
 			
 			.resource-info {
-				padding: 16px;
+				padding: 12px;
 				
 				.resource-title {
 					font-size: 16px;
-					font-weight: 500;
+					font-weight: bold;
 					margin-bottom: 8px;
+					color: var(--el-text-color-primary);
 					white-space: nowrap;
 					overflow: hidden;
 					text-overflow: ellipsis;
-					color: var(--el-text-color-primary);
 				}
 				
 				.resource-desc {
 					font-size: 13px;
 					color: var(--el-text-color-secondary);
-					margin-bottom: 12px;
-					height: 38px;
+					margin-bottom: 8px;
+					height: 40px;
 					overflow: hidden;
 					text-overflow: ellipsis;
 					display: -webkit-box;
@@ -1445,7 +1680,7 @@ function resetAllResources() {
 						align-items: center;
 						
 						.el-icon {
-							margin-right: 4px;
+							margin-right: 5px;
 							font-size: 14px;
 						}
 					}
@@ -1453,111 +1688,55 @@ function resetAllResources() {
 			}
 			
 			.resource-actions {
-				padding: 0 16px 16px;
 				display: flex;
 				justify-content: space-around;
+				padding: 8px;
 				border-top: 1px solid var(--el-border-color-lighter);
-				padding-top: 12px;
-				margin-top: -4px;
 				
 				.el-button {
-					flex: 1;
-					
-					.el-icon {
-						font-size: 18px;
-					}
+					margin: 0;
+				}
+			}
+		}
+		
+		.pagination-footer {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			margin-top: 20px;
+			
+			.pagination-info {
+				color: var(--el-text-color-secondary);
+				font-size: 14px;
+				
+				.total-count {
+					font-weight: bold;
+					color: var(--el-color-primary);
 				}
 			}
 		}
 	}
 	
-	.pagination-footer {
-		padding: 20px 0;
-		margin-top: 20px;
-		border-top: 1px solid var(--el-border-color-lighter);
+	.action-buttons {
 		display: flex;
-		justify-content: space-between;
 		align-items: center;
 		
-		.pagination-info {
-			font-size: 14px;
-			color: var(--el-text-color-secondary);
-			
-			.total-count {
-				font-weight: 500;
-				color: var(--el-color-primary);
-			}
-		}
-		
-		.el-pagination {
-			margin-left: auto;
+		.el-button {
+			margin-left: 10px;
 		}
 	}
 }
 
-// 通用分页容器样式
-.pagination-container {
+.upload-demo {
+	width: 100%;
+}
+
+.video-container {
 	display: flex;
 	justify-content: center;
-	width: 100%;
-	overflow-x: auto;
-	
-	:deep(.el-pagination) {
-		padding: 0;
-		margin: 0;
-		font-weight: normal;
-		white-space: nowrap;
-		
-		.el-pagination__total {
-			margin-right: 16px;
-		}
-		
-		.el-pagination__sizes {
-			margin-right: 16px;
-		}
-	}
-}
-
-.resource-upload {
-	width: 100%;
-	
-	:deep(.el-upload-dragger) {
-		width: 100%;
-		height: 180px;
-	}
-}
-
-.cover-uploader {
-	.cover-preview {
-		width: 178px;
-		height: 178px;
-		border: 1px dashed var(--el-border-color);
-		border-radius: 6px;
-		overflow: hidden;
-		
-		img {
-			width: 100%;
-			height: 100%;
-			display: block;
-			object-fit: cover;
-		}
-		
-		.cover-placeholder {
-			width: 100%;
-			height: 100%;
-			display: flex;
-			flex-direction: column;
-			justify-content: center;
-			align-items: center;
-			color: var(--el-text-color-secondary);
-			cursor: pointer;
-			
-			.el-icon {
-				font-size: 32px;
-				margin-bottom: 8px;
-			}
-		}
-	}
+	background-color: #000;
+	border-radius: 4px;
+	overflow: hidden;
 }
 </style>
 

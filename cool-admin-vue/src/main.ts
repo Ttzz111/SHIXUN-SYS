@@ -2,7 +2,11 @@ import { createApp } from 'vue';
 import App from './App.vue';
 import { bootstrap } from './cool';
 
+
+
 const app = createApp(App);
+
+
 
 // 启动
 bootstrap(app)

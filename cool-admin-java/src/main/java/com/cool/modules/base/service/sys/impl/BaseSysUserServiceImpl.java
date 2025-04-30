@@ -11,6 +11,8 @@ import cn.hutool.core.util.ArrayUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.crypto.digest.MD5;
 import cn.hutool.json.JSONObject;
+import cn.hutool.poi.excel.ExcelReader;
+import cn.hutool.poi.excel.ExcelUtil;
 import com.cool.core.base.BaseServiceImpl;
 import com.cool.core.base.ModifyEnum;
 import com.cool.core.cache.CoolCache;
@@ -29,6 +31,11 @@ import com.mybatisflex.core.update.UpdateChain;
 import lombok.RequiredArgsConstructor;
 import org.dromara.autotable.core.constants.DatabaseDialect;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * 系统用户
@@ -182,5 +189,80 @@ public class BaseSysUserServiceImpl extends BaseServiceImpl<BaseSysUserMapper, B
         userEntity.setPassword(null);
         return Dict.parse(userEntity).set("roleIdList", roleIdList).set("departmentName",
             departmentEntity != null ? departmentEntity.getName() : null);
+    }
+    
+    @Override
+    public List<BaseSysUserEntity> importUsers(MultipartFile file, Long departmentId) {
+        List<BaseSysUserEntity> importedUsers = new ArrayList<>();
+        
+        try {
+            ExcelReader reader = ExcelUtil.getReader(file.getInputStream());
+            
+            // 设置别名，将Excel中的表头映射到实体类属性
+            reader.addHeaderAlias("用户名", "username");
+            reader.addHeaderAlias("姓名", "name");
+            reader.addHeaderAlias("昵称", "nickName");
+            reader.addHeaderAlias("手机号码", "phone");
+            reader.addHeaderAlias("邮箱", "email");
+            reader.addHeaderAlias("密码(默认123456)", "password");
+            reader.addHeaderAlias("状态(0-禁用,1-启用)", "status");
+            reader.addHeaderAlias("备注", "remark");
+            
+            // 将Excel中的数据转为Dict对象列表
+            List<Dict> rowList = reader.readAll(Dict.class);
+            
+            for (Dict row : rowList) {
+                String username = row.getStr("username");
+                
+                // 检查必填字段
+                if (username == null || username.trim().isEmpty()) {
+                    continue; // 跳过没有用户名的行
+                }
+                
+                // 检查用户名是否已存在
+                BaseSysUserEntity check = getOne(
+                    QueryWrapper.create().eq(BaseSysUserEntity::getUsername, username));
+                
+                // 跳过已存在的用户名
+                if (check != null) {
+                    continue;
+                }
+                
+                // 创建新用户对象
+                BaseSysUserEntity user = new BaseSysUserEntity();
+                user.setUsername(username);
+                user.setName(row.getStr("name"));
+                user.setNickName(row.getStr("nickName"));
+                user.setPhone(row.getStr("phone"));
+                user.setEmail(row.getStr("email"));
+                user.setRemark(row.getStr("remark"));
+                
+                // 设置状态，默认为启用
+                Integer status = row.getInt("status");
+                user.setStatus(status != null ? status : 1);
+                
+                // 设置部门ID
+                user.setDepartmentId(departmentId);
+                
+                // 设置密码版本
+                user.setPasswordV(1);
+                
+                // 设置密码，如果没有提供则使用默认密码123456
+                String password = row.getStr("password");
+                if (password != null && !password.trim().isEmpty()) {
+                    user.setPassword(MD5.create().digestHex(password));
+                } else {
+                    user.setPassword(MD5.create().digestHex("123456"));
+                }
+                
+                // 保存用户
+                save(user);
+                importedUsers.add(user);
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("导入用户失败: " + e.getMessage());
+        }
+        
+        return importedUsers;
     }
 }
