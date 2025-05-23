@@ -1,5 +1,10 @@
 <template>
 	<div class="resource-audit page-container">
+		<!-- 蓝色横幅Banner -->
+		<div class="banner-box">
+			<h1>资源审核</h1>
+			<p>在这里可以对所有上传的资源进行审核、预览和管理，支持批量操作，提升审核效率！</p>
+		</div>
 		<!-- 操作栏 -->
 		<cl-crud ref="Crud">
 			<cl-row>
@@ -336,7 +341,7 @@ const mockData = [
 		type: 'document',
 		categoryId: 101,
 		categoryName: '工程训练IA',
-		author: '张教授',
+		author: 'stu1',
 		size: 1024 * 1024 * 2.5, // 2.5MB
 		createTime: '2025-04-15 14:30:00',
 		status: 'pending',
@@ -348,7 +353,7 @@ const mockData = [
 		type: 'video',
 		categoryId: 202,
 		categoryName: '激光加工创新训练',
-		author: '李同学',
+		author: 'stu1',
 		size: 1024 * 1024 * 15, // 15MB
 		createTime: '2025-04-15 14:31:00',
 		status: 'pending',
@@ -360,7 +365,7 @@ const mockData = [
 		type: 'image',
 		categoryId: 103,
 		categoryName: '工程训练III',
-		author: '王同学',
+		author: 'stu1',
 		size: 1024 * 1024 * 1.2, // 1.2MB
 		createTime: '2025-04-15 14:32:00',
 		status: 'approved',
@@ -372,7 +377,7 @@ const mockData = [
 		type: 'document',
 		categoryId: 301,
 		categoryName: '虚拟仿真设备VR使用学习',
-		author: '赵老师',
+		author: 'stu1',
 		size: 1024 * 1024 * 3.7, // 3.7MB
 		createTime: '2025-04-15 14:32:30',
 		status: 'rejected',
@@ -384,12 +389,60 @@ const mockData = [
 		type: 'document',
 		categoryId: 201,
 		categoryName: '陶艺制作与体验',
-		author: '孙教授',
+		author: 'stu1',
 		size: 1024 * 1024 * 5.2, // 5.2MB
 		createTime: '2025-04-15 14:32:45',
 		status: 'pending',
 		description: '陶艺制作全流程教程，适合初学者学习使用。'
 	},
+	{
+		id: 6,
+		name: '工程创客训练：基于vslam的多旋翼自主无人机的设计、制造和调试',
+		type: 'document',
+		categoryId: 401,
+		categoryName: '工程创客训练',
+		author: 'stu1',
+		size: 1024 * 1024 * 2.5,
+		createTime: '2025-05-17 14:30:00',
+		status: 'pending',
+		description: '基于vslam的多旋翼自主无人机的设计、制造和调试完整教程。'
+	},
+	{
+		id: 7,
+		name: '工程创客训练：献礼百廿河工-基于工大元素的文创产品的设计与制作',
+		type: 'document',
+		categoryId: 402,
+		categoryName: '工程创客训练',
+		author: 'stu1',
+		size: 1024 * 1024 * 15,
+		createTime: '2025-05-17 14:31:00',
+		status: 'pending',
+		description: '基于工大元素的文创产品的设计与制作教程。'
+	},
+	{
+		id: 8,
+		name: '工程创客训练：立式绳驱动蛇形自动充电手臂结构及控制系统设计',
+		type: 'document',
+		categoryId: 403,
+		categoryName: '工程创客训练',
+		author: 'stu1',
+		size: 1024 * 1024 * 1.2,
+		createTime: '2025-05-17 14:32:00',
+		status: 'pending',
+		description: '立式绳驱动蛇形自动充电手臂结构及控制系统设计详细说明。'
+	},
+	{
+		id: 9,
+		name: '工程创客训练：反射式钢筘筘齿计数器研制',
+		type: 'document',
+		categoryId: 404,
+		categoryName: '工程创客训练',
+		author: 'stu1',
+		size: 1024 * 1024 * 3.7,
+		createTime: '2025-05-17 14:32:30',
+		status: 'pending',
+		description: '反射式钢筘筘齿计数器研制技术文档。'
+	}
 ];
 
 // 资源类型配置
@@ -478,6 +531,11 @@ function loadData() {
 		if (search.status) {
 			filteredData = filteredData.filter(item => item.status === search.status);
 		}
+		
+		// 按创建时间倒序排序
+		filteredData.sort((a, b) => {
+			return new Date(b.createTime).getTime() - new Date(a.createTime).getTime();
+		});
 		
 		// 计算总数
 		page.total = filteredData.length;
@@ -652,6 +710,9 @@ onMounted(() => {
 <style lang="scss" scoped>
 .resource-audit {
 	padding: 20px;
+	height: calc(100vh - 120px);
+	display: flex;
+	flex-direction: column;
 	
 	.search-box {
 		display: flex;
@@ -703,43 +764,86 @@ onMounted(() => {
 			margin: 0;
 		}
 	}
-}
 
-/* 全局表格样式优化 */
-:deep(.el-table) {
-	border-radius: 6px;
-	overflow: hidden;
-	box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
-	
-	.el-table__header th {
-		background-color: #f5f7fa;
-		color: #606266;
-		font-weight: 600;
-	}
-	
-	.el-tag {
-		border-radius: 4px;
-	}
-}
+	:deep(.el-table) {
+		flex: 1;
+		overflow: auto;
+		border-radius: 6px;
+		box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
+		
+		.el-table__header th {
+			background-color: #f5f7fa;
+			color: #606266;
+			font-weight: 600;
+		}
+		
+		.el-tag {
+			border-radius: 4px;
+		}
 
-/* 对话框样式优化 */
-:deep(.el-dialog) {
-	border-radius: 8px;
-	overflow: hidden;
-	
-	.el-dialog__header {
-		border-bottom: 1px solid #ebeef5;
-		padding: 15px 20px;
-		margin-right: 0;
+		.el-table__body-wrapper {
+			overflow-y: auto;
+			max-height: calc(100vh - 300px);
+		}
 	}
-	
-	.el-dialog__body {
-		padding: 20px;
+
+	:deep(.el-dialog) {
+		border-radius: 8px;
+		overflow: hidden;
+		
+		.el-dialog__header {
+			border-bottom: 1px solid #ebeef5;
+			padding: 15px 20px;
+			margin-right: 0;
+		}
+		
+		.el-dialog__body {
+			padding: 20px;
+			max-height: calc(100vh - 200px);
+			overflow-y: auto;
+		}
+		
+		.el-dialog__footer {
+			border-top: 1px solid #ebeef5;
+			padding: 15px 20px;
+		}
 	}
-	
-	.el-dialog__footer {
-		border-top: 1px solid #ebeef5;
-		padding: 15px 20px;
+
+	:deep(.el-card) {
+		border-radius: 8px;
+		box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
+		margin-bottom: 20px;
+		
+		.el-card__header {
+			padding: 15px 20px;
+			border-bottom: 1px solid #ebeef5;
+			background-color: #f5f7fa;
+		}
+	}
+
+	.banner-box {
+		width: 100%;
+		background: linear-gradient(90deg, #2989d8 0%, #1e5799 100%);
+		color: #fff;
+		border-radius: 10px;
+		padding: 32px 24px 24px 32px;
+		margin-bottom: 24px;
+		box-sizing: border-box;
+		box-shadow: 0 2px 8px 0 rgba(41,137,216,0.08);
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+
+		h1 {
+			font-size: 2rem;
+			font-weight: bold;
+			margin: 0 0 8px 0;
+		}
+		p {
+			font-size: 1.1rem;
+			margin: 0;
+			opacity: 0.95;
+		}
 	}
 }
 </style> 

@@ -8,6 +8,7 @@ import com.cool.modules.user.entity.UserInfoEntity;
 import com.cool.modules.user.mapper.UserInfoMapper;
 import com.cool.modules.user.service.UserInfoService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -15,6 +16,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserInfoServiceImpl extends BaseServiceImpl<UserInfoMapper, UserInfoEntity> implements
@@ -49,6 +51,54 @@ public class UserInfoServiceImpl extends BaseServiceImpl<UserInfoMapper, UserInf
         info.setId(userId);
         info.setPhone(phone);
         info.updateById();
+    }
+
+    @Override
+    public void updatePersonInfo(Long userId, UserInfoEntity personInfo) {
+        UserInfoEntity info = getById(userId);
+        if (info == null) {
+            throw new RuntimeException("用户不存在");
+        }
+        
+        log.info("更新用户信息 - 用户ID: {}, 更新数据: {}", userId, personInfo);
+        
+        // 更新基本信息
+        if (personInfo.getRealName() != null) {
+            info.setRealName(personInfo.getRealName());
+        }
+        if (personInfo.getStudentId() != null) {
+            info.setStudentId(personInfo.getStudentId());
+        }
+        if (personInfo.getGender() != null) {
+            info.setGender(personInfo.getGender());
+        }
+        if (personInfo.getCollege() != null) {
+            info.setCollege(personInfo.getCollege());
+        }
+        if (personInfo.getMajor() != null) {
+            info.setMajor(personInfo.getMajor());
+        }
+        if (personInfo.getNickName() != null) {
+            info.setNickName(personInfo.getNickName());
+        }
+        if (personInfo.getPhone() != null) {
+            info.setPhone(personInfo.getPhone());
+        }
+        if (personInfo.getAvatarUrl() != null) {
+            info.setAvatarUrl(personInfo.getAvatarUrl());
+        }
+        
+        // 如果提供了新密码，则更新密码
+        if (personInfo.getPassword() != null && !personInfo.getPassword().isEmpty()) {
+            info.setPassword(MD5.create().digestHex(personInfo.getPassword()));
+        }
+        
+        boolean success = info.updateById();
+        log.info("更新用户信息结果: {}", success);
+        
+        if (!success) {
+            throw new RuntimeException("更新用户信息失败");
+        }
     }
     
     @Override

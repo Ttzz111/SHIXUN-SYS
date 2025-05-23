@@ -10,10 +10,12 @@ import com.cool.modules.user.service.UserInfoService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestAttribute;
 
+@Slf4j
 @RequiredArgsConstructor
 @Tag(name = "用户信息", description = "用户信息")
 @CoolRestController
@@ -25,19 +27,28 @@ public class AppUserInfoController {
     @GetMapping("/person")
     public R person() {
         Long userId = CoolSecurityUtil.getCurrentUserId();
+        log.info("获取用户信息 - 用户ID: {}", userId);
         UserInfoEntity userInfoEntity = userInfoService.person(userId);
-        return R.ok(EntityUtils.toMap(userInfoEntity,
-            "password"));
+        return R.ok(EntityUtils.toMap(userInfoEntity, "password"));
     }
 
     @Operation(summary = "更新用户信息")
     @PostMapping("/updatePerson")
     public R updatePerson(@RequestAttribute JSONObject requestParams) {
-        UserInfoEntity infoEntity = requestParams.toBean(UserInfoEntity.class);
-        infoEntity.setId(CoolSecurityUtil.getCurrentUserId());
-        return R.ok(
-            userInfoService.updateById(infoEntity)
-        );
+        try {
+            Long userId = CoolSecurityUtil.getCurrentUserId();
+            log.info("更新用户信息 - 用户ID: {}, 请求参数: {}", userId, requestParams);
+            
+            UserInfoEntity infoEntity = requestParams.toBean(UserInfoEntity.class);
+            userInfoService.updatePersonInfo(userId, infoEntity);
+            
+            // 更新成功后重新获取用户信息
+            UserInfoEntity updatedInfo = userInfoService.person(userId);
+            return R.ok(EntityUtils.toMap(updatedInfo, "password"));
+        } catch (Exception e) {
+            log.error("更新用户信息失败", e);
+            return R.error(e.getMessage());
+        }
     }
 
     @Operation(summary = "更新用户密码")

@@ -30,6 +30,13 @@ public interface UserInfoService extends BaseService<UserInfoEntity> {
     void bindPhone(Long currentUserId, String phone, String code);
     
     /**
+     * 更新个人信息
+     * @param userId 用户ID
+     * @param personInfo 个人信息
+     */
+    void updatePersonInfo(Long userId, UserInfoEntity personInfo);
+    
+    /**
      * 批量导入用户
      * @param file Excel文件
      * @return 导入结果信息

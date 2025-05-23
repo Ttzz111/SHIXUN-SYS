@@ -34,4 +34,16 @@ public class UserInfoEntity extends BaseEntity<UserInfoEntity> {
 
     @ColumnDefine(comment = "密码")
     private String password;
+
+    @ColumnDefine(comment = "真实姓名")
+    private String realName;
+
+    @ColumnDefine(comment = "学号/工号")
+    private String studentId;
+
+    @ColumnDefine(comment = "学院")
+    private String college;
+
+    @ColumnDefine(comment = "专业")
+    private String major;
 }

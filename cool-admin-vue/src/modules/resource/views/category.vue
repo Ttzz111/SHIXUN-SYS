@@ -168,7 +168,7 @@
 						<div class="resource-actions">
 							<el-tooltip content="预览资源" placement="top" :show-after="300">
 								<el-button type="primary" text @click="onPreviewResource(item)">
-									<el-icon><view /></el-icon>
+									<el-icon :size="20"><View /></el-icon>
 								</el-button>
 							</el-tooltip>
 							<el-tooltip content="下载资源" placement="top" :show-after="300">
@@ -273,7 +273,7 @@
 					</div>
 					<template #tip>
 						<div class="el-upload__tip">
-							提示：支持各种格式的文件，大小不超过100MB
+							提示：支持各种格式的文件，大小不超过500MB
 						</div>
 					</template>
 				</el-upload>
@@ -393,6 +393,8 @@ const resourceTypes = ref([
 	{ label: '文档', value: 'document', icon: 'document' },
 	{ label: '图片', value: 'image', icon: 'picture' },
 	{ label: '视频', value: 'video', icon: 'film' },
+	{ label: '音频', value: 'audio', icon: 'headset' },
+	{ label: '压缩包', value: 'archive', icon: 'folder' }
 ]);
 
 // 对话框相关
@@ -644,75 +646,53 @@ function onDeleteResource(item: any) {
 // 文件上传变化处理
 function handleFileChange(file) {
 	if (!file) return;
-	
-	// 确保file有效
-	if (file.raw) {
-		// 检查文件大小
-		const isLt50M = file.raw.size / 1024 / 1024 < 50;
-		if (!isLt50M) {
-			ElMessage.error('文件大小不能超过 50MB!');
-			return;
-		}
-		
-		resourceForm.file = file.raw;
-		
-		// 自动设置资源类型
-		const fileType = getFileTypeFromMime(file.raw.type);
-		resourceForm.type = fileType;
-		
-		// 如果没有设置封面，自动生成封面预览
-		if (!resourceForm.coverUrl) {
-			// 对于图片类型自动使用上传的图片作为封面
-			if (file.raw.type.startsWith('image/')) {
-				createCoverFromFile(file.raw);
-			}
-		}
-	} else if (file.file) {
-		// 检查文件大小
-		const isLt50M = file.file.size / 1024 / 1024 < 50;
-		if (!isLt50M) {
-			ElMessage.error('文件大小不能超过 50MB!');
-			return;
-		}
-		
-		resourceForm.file = file.file;
-		
-		// 自动设置资源类型
-		const fileType = getFileTypeFromMime(file.file.type);
-		resourceForm.type = fileType;
-		
-		// 如果没有设置封面，自动生成封面预览
-		if (!resourceForm.coverUrl) {
-			// 对于图片类型自动使用上传的图片作为封面
-			if (file.file.type.startsWith('image/')) {
-				createCoverFromFile(file.file);
-			}
-		}
+	let raw = file.raw || file.file;
+	if (!raw) return;
+
+	// 文件大小校验（500MB）
+	const isLt500M = raw.size / 1024 / 1024 < 500;
+	if (!isLt500M) {
+		ElMessage.error('文件大小不能超过 500MB!');
+		return;
 	}
-	
-	console.log('文件已选择：', resourceForm.file);
+	resourceForm.file = raw;
+
+	// 图片类型，直接用图片本地URL
+	if (raw.type.startsWith('image/')) {
+		resourceForm.coverUrl = URL.createObjectURL(raw);
+	}
+	// 视频类型，自动生成首帧
+	else if (raw.type.startsWith('video/')) {
+		getVideoCover(raw).then(base64 => {
+			resourceForm.coverUrl = base64;
+		});
+	}
+	// 其他类型，清空封面
+	else {
+		resourceForm.coverUrl = '';
+	}
 }
 
-// 从文件生成封面
-function createCoverFromFile(file) {
-	if (!file) return;
-	if (!file.type || !file.type.startsWith('image/')) return;
-	
-	const reader = new FileReader();
-	reader.onload = (e) => {
-		resourceForm.coverUrl = e.target?.result || '';
-	};
-	reader.readAsDataURL(file);
-}
-
-// 封面变化处理
-function handleCoverChange(file) {
-	if (!file) return;
-	if (file.raw) {
-		createCoverFromFile(file.raw);
-	} else if (file.file) {
-		createCoverFromFile(file.file);
-	}
+// 获取视频首帧
+function getVideoCover(file) {
+	return new Promise((resolve) => {
+		const video = document.createElement('video');
+		video.preload = 'metadata';
+		video.muted = true;
+		video.src = URL.createObjectURL(file);
+		video.currentTime = 0.1;
+		video.onloadeddata = function () {
+			const canvas = document.createElement('canvas');
+			canvas.width = video.videoWidth;
+			canvas.height = video.videoHeight;
+			const ctx = canvas.getContext('2d');
+			ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+			resolve(canvas.toDataURL('image/png'));
+		};
+		video.onerror = function () {
+			resolve('');
+		};
+	});
 }
 
 // 提交表单
@@ -1139,7 +1119,7 @@ function resetAllResources() {
 	});
 }
 
-// 模拟资源列表数据
+// 示例资源数据
 const allResources = [
 	{
 		id: 1,
@@ -1182,7 +1162,7 @@ const allResources = [
 		viewCount: 321,
 		downloadCount: 180,
 		author: '王教授',
-		createTime: '2023-08-05T09:15:00',
+		createTime: '2025-04-15T09:15:00',
 		fileSize: 8192,
 		selected: false
 	},
@@ -1197,7 +1177,7 @@ const allResources = [
 		viewCount: 410,
 		downloadCount: 195,
 		author: '刘老师',
-		createTime: '2023-07-22T16:40:00',
+		createTime: '2025-04-15T16:40:00',
 		fileSize: 25600,
 		selected: false
 	},
@@ -1212,115 +1192,85 @@ const allResources = [
 		viewCount: 628,
 		downloadCount: 315,
 		author: '赵教授',
-		createTime: '2023-08-10T11:20:00',
+		createTime: '2025-04-15T11:20:00',
 		fileSize: 768000,
 		selected: false
 	},
 	{
 		id: 6,
-		name: '工程认知训练手册',
+		name: '工程训练III实验报告模板',
 		type: 'document',
-		categoryId: 105,
+		categoryId: 103,
 		url: 'https://example.com/doc3',
 		coverUrl: 'https://picsum.photos/300/200?random=6',
-		description: '工程认知训练完整教学手册与案例分析',
-		viewCount: 275,
-		downloadCount: 142,
+		description: '标准实验报告模板与填写指南',
+		viewCount: 289,
+		downloadCount: 156,
 		author: '陈教授',
-		createTime: '2023-06-30T13:50:00',
-		fileSize: 12288,
-		selected: false
-	},
-	{
-		id: 7,
-		name: '精工细铸工艺流程',
-		type: 'document',
-		categoryId: 203,
-		url: 'https://example.com/doc4',
-		coverUrl: 'https://picsum.photos/300/200?random=7',
-		description: '精密铸造工艺的理论基础与实践指导',
-		viewCount: 342,
-		downloadCount: 160,
-		author: '马教授',
-		createTime: '2023-07-29T15:10:00',
+		createTime: '2025-04-15T13:45:00',
 		fileSize: 10240,
 		selected: false
 	},
 	{
-		id: 8,
-		name: '工程训练III实验照片集',
+		id: 7,
+		name: '精工细铸工艺展示',
 		type: 'image',
-		categoryId: 103,
+		categoryId: 203,
 		url: 'https://example.com/image2',
-		coverUrl: 'https://picsum.photos/300/200?random=8',
-		description: '工程训练III各类实验的高清照片与说明',
-		viewCount: 198,
-		downloadCount: 87,
-		author: '杨老师',
-		createTime: '2023-08-12T10:30:00',
-		fileSize: 51200,
-		selected: false
-	},
-	{
-		id: 9,
-		name: '工程训练IV综合实训视频',
-		type: 'video',
-		categoryId: 104,
-		url: 'https://example.com/video3',
-		coverUrl: 'https://picsum.photos/300/200?random=9',
-		description: '工程训练IV阶段综合能力培养实训过程',
-		viewCount: 435,
-		downloadCount: 210,
-		author: '周教授',
-		createTime: '2023-08-03T14:20:00',
-		fileSize: 614400,
-		selected: false
-	},
-	{
-		id: 10,
-		name: '激光加工设备使用手册',
-		type: 'document',
-		categoryId: 202,
-		url: 'https://example.com/doc5',
-		coverUrl: 'https://picsum.photos/300/200?random=10',
-		description: '激光加工设备的使用方法与维护知识',
-		viewCount: 382,
-		downloadCount: 175,
-		author: '黄教授',
-		createTime: '2023-07-18T09:45:00',
-		fileSize: 9216,
-		selected: false
-	},
-	{
-		id: 11,
-		name: 'VR设备实训实景图',
-		type: 'image',
-		categoryId: 301,
-		url: 'https://example.com/image3',
-		coverUrl: 'https://picsum.photos/300/200?random=11',
-		description: '虚拟仿真实训环境与设备高清图片',
-		viewCount: 218,
-		downloadCount: 94,
-		author: '吴老师',
-		createTime: '2023-08-14T16:35:00',
+		coverUrl: 'https://picsum.photos/300/200?random=7',
+		description: '精工细铸工艺过程高清图片集',
+		viewCount: 378,
+		downloadCount: 245,
+		author: '周老师',
+		createTime: '2025-04-15T15:30:00',
 		fileSize: 30720,
 		selected: false
 	},
 	{
-		id: 12,
-		name: '陶艺作品展示视频',
-		type: 'video',
-		categoryId: 201,
-		url: 'https://example.com/video4',
-		coverUrl: 'https://picsum.photos/300/200?random=12',
-		description: '学生陶艺作品展示与制作过程回顾',
-		viewCount: 372,
-		downloadCount: 125,
-		author: '郑老师',
-		createTime: '2023-08-01T11:25:00',
-		fileSize: 409600,
+		id: 8,
+		name: '工程认知训练音频讲解',
+		type: 'audio',
+		categoryId: 105,
+		url: 'https://example.com/audio1',
+		coverUrl: 'https://picsum.photos/300/200?random=8',
+		description: '工程认知训练课程音频讲解',
+		viewCount: 156,
+		downloadCount: 98,
+		author: '吴教授',
+		createTime: '2025-04-15T10:15:00',
+		fileSize: 25600,
 		selected: false
 	},
+	{
+		id: 9,
+		name: '工程训练IV资料包',
+		type: 'archive',
+		categoryId: 104,
+		url: 'https://example.com/zip1',
+		coverUrl: 'https://picsum.photos/300/200?random=9',
+		description: '工程训练IV全套学习资料',
+		viewCount: 432,
+		downloadCount: 267,
+		author: '郑教授',
+		createTime: '2025-04-15T14:50:00',
+		fileSize: 102400,
+		selected: false
+	},
+	{
+		id: 10,
+		name: '激光加工创新作品集',
+		type: 'image',
+		categoryId: 202,
+		url: 'https://example.com/image3',
+		coverUrl: 'https://picsum.photos/300/200?random=10',
+		description: '学生激光加工创新作品展示',
+		viewCount: 567,
+		downloadCount: 289,
+		author: '林老师',
+		createTime: '2025-04-15T16:20:00',
+		fileSize: 40960,
+		selected: false
+	}
 ];
 
 // 加载数据
@@ -1466,175 +1416,165 @@ const getCategoryName = (id) => {
 
 <style lang="scss" scoped>
 .resource-category {
-	padding: 20px;
-	
+	.page-container {
+		padding: 20px;
+	}
+
 	.search-box {
 		display: flex;
 		align-items: center;
-		
+		margin-bottom: 20px;
+
 		.search-input {
 			width: 300px;
 		}
 	}
-	
+
 	.filter-container {
-		margin: 20px 0;
-		background-color: var(--el-bg-color);
-		border-radius: 8px;
+		background: var(--el-bg-color);
 		padding: 15px;
+		border-radius: 8px;
+		margin-bottom: 20px;
 		box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
-		
+
 		.filter-item {
-			margin-bottom: 12px;
-			
+			display: flex;
+			align-items: center;
+			margin-bottom: 15px;
+
 			&:last-child {
 				margin-bottom: 0;
 			}
-		}
-		
-		.filter-label {
-			display: inline-block;
-			font-weight: bold;
-			color: var(--el-text-color-primary);
-			margin-right: 10px;
-			vertical-align: middle;
-		}
-		
-		.filter-options {
-			display: inline-block;
-			vertical-align: middle;
-		}
-		
-		.category-tag {
-			margin-right: 10px;
-			margin-bottom: 5px;
-			cursor: pointer;
-			transition: all 0.3s;
-			
-			&.active {
-				transform: scale(1.05);
+
+			.filter-label {
+				width: 80px;
+				color: var(--el-text-color-regular);
+				font-size: 14px;
 			}
-		}
-	}
-	
-	.resource-list-container {
-		min-height: 400px;
-		
-		.resource-list {
-			margin-bottom: 20px;
-		}
-		
-		.resource-card {
-			margin-bottom: 20px;
-			transition: all 0.3s;
-			position: relative;
-			border: 2px solid transparent;
-			
-			&:hover {
-				transform: translateY(-5px);
-				box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-				
-				.resource-hover-info {
-					opacity: 1;
-				}
-			}
-			
-			&.is-selected {
-				border-color: var(--el-color-primary);
-				
-				.selection-mark {
-					.el-checkbox {
-						opacity: 1;
+
+			.filter-options {
+				flex: 1;
+				display: flex;
+				flex-wrap: wrap;
+				gap: 10px;
+
+				.category-tag {
+					cursor: pointer;
+					transition: all 0.3s;
+					padding: 0 15px;
+					height: 32px;
+					line-height: 32px;
+					border-radius: 16px;
+
+					&:hover {
+						transform: translateY(-2px);
+					}
+
+					&.active {
+						transform: scale(1.05);
 					}
 				}
 			}
-			
+		}
+	}
+
+	.resource-list-container {
+		.resource-list {
+			margin: 0 -10px;
+		}
+
+		.resource-card {
+			margin: 10px;
+			transition: all 0.3s;
+			border-radius: 8px;
+			overflow: hidden;
+
+			&:hover {
+				transform: translateY(-5px);
+				box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+			}
+
+			&.is-selected {
+				border: 2px solid var(--el-color-primary);
+			}
+
 			.resource-cover {
-				height: 160px;
 				position: relative;
+				height: 200px;
 				overflow: hidden;
-				
+				cursor: pointer;
+
 				img {
 					width: 100%;
 					height: 100%;
 					object-fit: cover;
-					transition: transform 0.5s;
+					transition: transform 0.3s;
 				}
-				
+
 				&:hover img {
 					transform: scale(1.05);
 				}
-				
+
 				.resource-type {
 					position: absolute;
 					top: 10px;
 					right: 10px;
-					padding: 3px 8px;
-					border-radius: 4px;
-					font-size: 12px;
+					padding: 4px 12px;
+					border-radius: 12px;
+					background: rgba(0, 0, 0, 0.6);
 					color: #fff;
-					
+					font-size: 12px;
+					backdrop-filter: blur(4px);
+
 					&.type-document {
-						background-color: #409eff;
+						background: rgba(64, 158, 255, 0.8);
 					}
-					
+
 					&.type-video {
-						background-color: #67c23a;
+						background: rgba(245, 108, 108, 0.8);
 					}
-					
+
 					&.type-image {
-						background-color: #e6a23c;
+						background: rgba(103, 194, 58, 0.8);
 					}
-					
+
 					&.type-audio {
-						background-color: #f56c6c;
+						background: rgba(230, 162, 60, 0.8);
 					}
-					
+
 					&.type-archive {
-						background-color: #909399;
-					}
-					
-					&.type-other {
-						background-color: #909399;
+						background: rgba(144, 147, 153, 0.8);
 					}
 				}
-				
+
 				.selection-mark {
 					position: absolute;
 					top: 10px;
 					left: 10px;
 					z-index: 2;
-					
-					.el-checkbox {
-						background-color: rgba(255, 255, 255, 0.8);
-						border-radius: 4px;
-						padding: 2px;
-						opacity: 0.6;
-						transition: opacity 0.3s;
-					}
 				}
-				
+
 				.resource-hover-info {
 					position: absolute;
 					bottom: 0;
 					left: 0;
 					right: 0;
-					background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);
-					padding: 10px;
+					background: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent);
+					padding: 15px;
 					opacity: 0;
 					transition: opacity 0.3s;
-					
+
 					.hover-stats {
 						display: flex;
 						justify-content: flex-end;
-						
+						gap: 15px;
+
 						.stat-item {
 							color: #fff;
-							margin-left: 15px;
 							font-size: 14px;
 							display: flex;
 							align-items: center;
-							
+
 							.el-icon {
 								margin-right: 5px;
 								font-size: 16px;
@@ -1642,11 +1582,15 @@ const getCategoryName = (id) => {
 						}
 					}
 				}
+
+				&:hover .resource-hover-info {
+					opacity: 1;
+				}
 			}
-			
+
 			.resource-info {
-				padding: 12px;
-				
+				padding: 15px;
+
 				.resource-title {
 					font-size: 16px;
 					font-weight: bold;
@@ -1656,11 +1600,11 @@ const getCategoryName = (id) => {
 					overflow: hidden;
 					text-overflow: ellipsis;
 				}
-				
+
 				.resource-desc {
 					font-size: 13px;
 					color: var(--el-text-color-secondary);
-					margin-bottom: 8px;
+					margin-bottom: 12px;
 					height: 40px;
 					overflow: hidden;
 					text-overflow: ellipsis;
@@ -1668,17 +1612,17 @@ const getCategoryName = (id) => {
 					-webkit-line-clamp: 2;
 					-webkit-box-orient: vertical;
 				}
-				
+
 				.resource-meta {
 					display: flex;
 					justify-content: space-between;
 					font-size: 12px;
 					color: var(--el-text-color-secondary);
-					
+
 					.meta-item {
 						display: flex;
 						align-items: center;
-						
+
 						.el-icon {
 							margin-right: 5px;
 							font-size: 14px;
@@ -1686,29 +1630,36 @@ const getCategoryName = (id) => {
 					}
 				}
 			}
-			
+
 			.resource-actions {
 				display: flex;
 				justify-content: space-around;
-				padding: 8px;
+				padding: 10px;
 				border-top: 1px solid var(--el-border-color-lighter);
-				
+				background: var(--el-bg-color-page);
+
 				.el-button {
 					margin: 0;
+					padding: 8px 15px;
+
+					.el-icon {
+						margin-right: 5px;
+					}
 				}
 			}
 		}
-		
+
 		.pagination-footer {
 			display: flex;
 			justify-content: space-between;
 			align-items: center;
-			margin-top: 20px;
-			
+			margin-top: 30px;
+			padding: 20px 0;
+
 			.pagination-info {
 				color: var(--el-text-color-secondary);
 				font-size: 14px;
-				
+
 				.total-count {
 					font-weight: bold;
 					color: var(--el-color-primary);
@@ -1716,27 +1667,73 @@ const getCategoryName = (id) => {
 			}
 		}
 	}
-	
-	.action-buttons {
-		display: flex;
-		align-items: center;
-		
-		.el-button {
-			margin-left: 10px;
-		}
+}
+
+// 视频预览对话框样式
+.video-container {
+	width: 100%;
+	aspect-ratio: 16/9;
+	background: #000;
+	border-radius: 8px;
+	overflow: hidden;
+
+	video {
+		width: 100%;
+		height: 100%;
+		object-fit: contain;
 	}
 }
 
+// 上传对话框样式
 .upload-demo {
-	width: 100%;
+	:deep(.el-upload-dragger) {
+		width: 100%;
+		height: 200px;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		border: 2px dashed var(--el-border-color);
+		border-radius: 8px;
+		transition: all 0.3s;
+
+		&:hover {
+			border-color: var(--el-color-primary);
+		}
+
+		.el-icon--upload {
+			font-size: 48px;
+			color: var(--el-color-primary);
+			margin-bottom: 16px;
+		}
+
+		.el-upload__text {
+			color: var(--el-text-color-regular);
+			font-size: 14px;
+			text-align: center;
+
+			em {
+				color: var(--el-color-primary);
+				font-style: normal;
+			}
+		}
+	}
+
+	.el-upload__tip {
+		margin-top: 10px;
+		color: var(--el-text-color-secondary);
+		font-size: 12px;
+		text-align: center;
+	}
 }
 
-.video-container {
+.resource-actions .el-button {
+	min-width: 36px;
+	min-height: 36px;
 	display: flex;
+	align-items: center;
 	justify-content: center;
-	background-color: #000;
-	border-radius: 4px;
-	overflow: hidden;
+	padding: 0;
 }
 </style>
 

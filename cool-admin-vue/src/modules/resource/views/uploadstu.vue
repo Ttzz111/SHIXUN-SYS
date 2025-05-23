@@ -5,7 +5,7 @@
 			<cl-row>
 				<div class="page-header">
 					<h2 class="page-title">资源上传</h2>
-					<p class="subtitle">上传的资源将经过管理员审核后发布</p>
+					<p class="subtitle">上传的资源将经过教师审核后发布</p>
 				</div>
 			</cl-row>
 			
@@ -130,9 +130,7 @@
 							</el-table-column>
 							<el-table-column prop="type" label="资源类型" width="100">
 								<template #default="scope">
-									<el-tag :type="getResourceTypeTag(scope.row.type)">
-										{{ getResourceTypeName(scope.row.type) }}
-									</el-tag>
+									<div style="text-align:center;">{{ getResourceTypeName(scope.row.type) }}</div>
 								</template>
 							</el-table-column>
 							<el-table-column prop="categoryName" label="所属分类" width="140"></el-table-column>
@@ -343,53 +341,53 @@ const myResources = ref<any[]>([]);
 // 模拟用户上传的资源数据
 const mockUserResources = [
 	{
-		id: 101,
-		name: '车床操作注意事项.pdf',
-		type: 'document',
-		categoryId: 101,
-		categoryName: '工程训练IA',
-		author: user.info?.name || '当前用户',
-		size: 1024 * 1024 * 1.8, // 1.8MB
-		createTime: '2025-04-15 14:28:00',
-		status: 'pending',
-		description: '详细介绍了车床操作的安全注意事项和基本流程。'
-	},
-	{
-		id: 102,
-		name: '铣床实操演示.mp4',
+		id: 201,
+		name: '工程创客训练：3D打印连环画设计与制作.mp4',
 		type: 'video',
-		categoryId: 102,
-		categoryName: '工程训练II',
-		author: user.info?.name || '当前用户',
-		size: 1024 * 1024 * 22, // 22MB
-		createTime: '2025-04-15 14:25:30',
-		status: 'approved',
-		description: '铣床实际操作演示视频，包含基本参数设置和操作方法。'
-	},
-	{
-		id: 103,
-		name: '激光切割设计图纸.jpg',
-		type: 'image',
-		categoryId: 202,
-		categoryName: '激光加工创新训练',
-		author: user.info?.name || '当前用户',
-		size: 1024 * 1024 * 2.5, // 2.5MB
-		createTime: '2025-04-15 14:00:45',
-		status: 'rejected',
-		description: '激光切割工艺设计图纸，用于创新训练课程。'
-	},
-	{
-		id: 104,
-		name: '3D打印模型设计.pdf',
-		type: 'document',
 		categoryId: 103,
 		categoryName: '工程训练III',
 		author: user.info?.name || '当前用户',
-		size: 1024 * 1024 * 3.7, // 3.7MB
-		createTime: '2025-04-14 16:45:12',
-		status: 'pending',
-		description: '3D打印模型设计说明文档，包含设计思路和参数设置。'
+		size: 1024 * 1024 * 120, // 120MB
+		createTime: '2025-05-17 10:00:00',
+		status: 'approved',
+		description: '3D打印连环画设计与制作全过程视频。'
 	},
+	{
+		id: 202,
+		name: '匠心训练——基于RFID的物流分拣系统.pdf',
+		type: 'video',
+		categoryId: 101,
+		categoryName: '工程训练IA',
+		author: user.info?.name || '当前用户',
+		size: 1024 * 1024 * 167, // 5.2MB
+		createTime: '2025-05-17 10:10:00',
+		status: 'approved',
+		description: '基于RFID的物流分拣系统设计与实现文档。'
+	},
+	{
+		id: 203,
+		name: '工程创客训练：基于vslam的多旋翼自主无人机的设计、制造和调试.pdf',
+		type: 'video',
+		categoryId: 103,
+		categoryName: '工程训练III',
+		author: user.info?.name || '当前用户',
+		size: 1024 * 1024 * 230, // 230MB
+		createTime: '2025-05-17 10:20:00',
+		status: 'approved',
+		description: '多旋翼自主无人机的设计、制造和调试详细资料。'
+	},
+	{
+		id: 204,
+		name: '工程创客训练：献礼百廿河工-基于工大元素的文创产品的设计与制作.pdf',
+		type: 'video',
+		categoryId: 103,
+		categoryName: '工程训练III',
+		author: user.info?.name || '当前用户',
+		size: 1024 * 1024 * 251, // 6.3MB
+		createTime: '2025-05-17 10:30:00',
+		status: 'approved',
+		description: '基于工大元素的文创产品设计与制作资料。'
+	}
 ];
 
 // 获取资源类型名称
@@ -684,18 +682,19 @@ onMounted(() => {
 	
 	.upload-card {
 		margin-bottom: 20px;
-		border-radius: 4px;
-		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
-		
-		.resource-form {
-			max-width: 800px;
-			margin: 0 auto;
-		}
+		padding: 24px 18px 18px 18px;
+		border-radius: 6px;
+		box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+	}
+	
+	.resource-form {
+		margin: 0;
+		max-width: none;
 	}
 	
 	.my-resources-card {
-		border-radius: 4px;
-		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+		padding: 12px 8px 8px 8px;
+		border-radius: 6px;
 		height: 100%;
 		display: flex;
 		flex-direction: column;
@@ -850,5 +849,9 @@ onMounted(() => {
 		border-top: 1px solid #ebeef5;
 		padding: 15px 20px;
 	}
+}
+
+.resource-upload.page-container {
+	padding: 20px;
 }
 </style>

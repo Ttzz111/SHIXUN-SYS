@@ -1,81 +1,56 @@
 <template>
 	<div class="fake-container">
-		<cl-crud ref="Crud">
-			<el-row class="mb20">
-				<el-col :span="24">
-					<cl-refresh-btn />
-					<cl-add-btn class="ml10" />
-					<cl-multi-delete-btn class="ml10" />
-					<el-button type="primary" @click="showImportDialog" class="ml10">
-						<template #icon>
-							<el-icon><Upload /></el-icon>
-						</template>
-						<span>批量导入</span>
-					</el-button>
-				</el-col>
-			</el-row>
-
-			<el-row :gutter="15" class="mb20">
-				<el-col :span="6">
-					<cl-filter label="题目内容">
-						<el-input v-model="form.content" placeholder="请输入题目内容" clearable @keydown.enter="search" />
-					</cl-filter>
-				</el-col>
-				
-				<el-col :span="6">
-					<cl-filter label="题目类型">
-						<el-select v-model="form.type" placeholder="请选择题目类型" clearable @change="search">
-							<el-option label="单选题" :value="1" />
-							<el-option label="多选题" :value="2" />
-							<el-option label="判断题" :value="3" />
-							<el-option label="简答题" :value="4" />
-						</el-select>
-					</cl-filter>
-				</el-col>
-				
-				<el-col :span="6">
-					<cl-filter label="难度等级">
-						<el-select v-model="form.level" placeholder="请选择难度等级" clearable @change="search">
-							<el-option label="简单" :value="1" />
-							<el-option label="中等" :value="2" />
-							<el-option label="困难" :value="3" />
-						</el-select>
-					</cl-filter>
-				</el-col>
-				
-				<el-col :span="6">
-					<cl-search-key placeholder="输入题目内容搜索" />
-				</el-col>
-			</el-row>
-
-			<el-table :data="tableData" border style="width: 100%" class="mb20">
-				<el-table-column type="selection" width="55" />
-				<el-table-column prop="content" label="题目内容" min-width="200" show-overflow-tooltip />
-				<el-table-column prop="typeText" label="题目类型" width="100" />
-				<el-table-column prop="score" label="分值" width="80" />
-				<el-table-column prop="levelText" label="难度等级" width="100" />
-				<el-table-column prop="createTime" label="创建时间" width="150" />
-				<el-table-column label="操作" width="150">
+		<div class="banner">
+			<h1>题库管理</h1>
+			<p>管理您的试题库，支持添加、编辑、删除和批量导入</p>
+		</div>
+		<div class="filter-bar">
+			<el-input v-model="form.content" placeholder="题目内容" clearable class="filter-input" />
+			<el-select v-model="form.type" placeholder="题目类型" clearable class="filter-select">
+				<el-option label="单选题" :value="1" />
+				<el-option label="多选题" :value="2" />
+				<el-option label="判断题" :value="3" />
+				<el-option label="简答题" :value="4" />
+			</el-select>
+			<el-select v-model="form.level" placeholder="难度等级" clearable class="filter-select">
+				<el-option label="简单" :value="1" />
+				<el-option label="中等" :value="2" />
+				<el-option label="困难" :value="3" />
+			</el-select>
+			<el-button type="primary" @click="search">搜索</el-button>
+			<el-button @click="resetForm">重置</el-button>
+			<el-button type="success" @click="openAddDialog">新增</el-button>
+			<el-button type="warning" @click="showImportDialog">批量导入</el-button>
+		</div>
+		<div class="table-scroll-wrapper">
+			<el-table :data="tableData" border style="width: 100%" height="420" class="question-table">
+				<el-table-column type="selection" width="50" />
+				<el-table-column prop="content" label="题目内容" min-width="140" show-overflow-tooltip />
+				<el-table-column prop="typeText" label="题目类型" width="90" align="center" />
+				<el-table-column prop="score" label="分值" width="60" align="center" />
+				<el-table-column prop="levelText" label="难度等级" width="90" align="center" />
+				<el-table-column prop="createTime" label="创建时间" width="140" align="center" />
+				<el-table-column label="操作" width="140" align="center">
 					<template #default="scope">
-						<el-button size="small" @click="viewQuestion(scope.row)">查看</el-button>
-						<el-button size="small" type="danger" @click="deleteQuestion(scope.row)">删除</el-button>
+						<div class="action-btns">
+							<el-button size="small" @click="viewQuestion(scope.row)">查看</el-button>
+							<el-button size="small" type="danger" @click="deleteQuestion(scope.row)">删除</el-button>
+						</div>
 					</template>
 				</el-table-column>
 			</el-table>
-
-			<el-row type="flex" justify="end">
-				<cl-flex1 />
-				<el-pagination
-					v-model:current-page="pagination.page"
-					v-model:page-size="pagination.size"
-					:total="pagination.total"
-					:page-sizes="[10, 20, 50, 100]"
-					layout="total, sizes, prev, pager, next, jumper"
-					@size-change="handleSizeChange"
-					@current-change="handleCurrentChange"
-				/>
-			</el-row>
-		</cl-crud>
+		</div>
+		<div class="pagination-bar">
+			<el-pagination
+				v-model:current-page="pagination.page"
+				v-model:page-size="pagination.size"
+				:total="pagination.total"
+				:page-sizes="[10, 20, 50, 100]"
+				layout="total, sizes, prev, pager, next, jumper"
+				@size-change="handleSizeChange"
+				@current-change="handleCurrentChange"
+			/>
+		</div>
 
 		<!-- 查看题目详情对话框 -->
 		<el-dialog v-model="detailDialog.visible" :title="detailDialog.title" width="600px">
@@ -304,7 +279,7 @@ function search() {
 const pagination = reactive({
 	page: 1,
 	size: 10,
-	total: 0
+	total: 100
 });
 
 // 分页方法
@@ -920,10 +895,33 @@ const addExampleQuestions = () => {
 
 // 初始化：页面加载时加载表格数据，如果没有数据则添加示例题目
 onMounted(() => {
-	// 清空现有题目数据，强制重新加载工程实训题目
-	localStorage.removeItem('fakeQuestions');
-	addExampleQuestions();
+	// 加载表格数据，不要强制清空和添加
 	loadTableData();
+
+	// 仅在没有任何数据时，才添加示例题目
+	const existingQuestions = JSON.parse(localStorage.getItem('fakeQuestions') || '[]');
+	if (existingQuestions.length === 0) {
+		console.log("首次加载，添加100条示例题目");
+		const manyQuestions = [];
+		for (let i = 1; i <= 100; i++) {
+			manyQuestions.push({
+				id: Date.now() + i,
+				content: `示例题目${i}：这是第${i}道自动生成的题目内容。`,
+				type: (i % 4) + 1,
+				typeText: ['单选题', '多选题', '判断题', '简答题'][(i % 4)],
+				score: 5 + (i % 6),
+				level: (i % 3) + 1,
+				levelText: ['简单', '中等', '困难'][(i % 3)],
+				options: [1, 2, 3].includes((i % 4) + 1) ? [`A选项${i}`, `B选项${i}`, `C选项${i}`] : [],
+				answers: [1, 2, 3].includes((i % 4) + 1) ? [`A选项${i}`] : [`参考答案${i}`],
+				analysis: `这是第${i}题的解析内容。`,
+				tags: [`标签${i % 5}`],
+				createTime: new Date().toISOString().slice(0, 19).replace('T', ' ')
+			});
+		}
+		localStorage.setItem('fakeQuestions', JSON.stringify(manyQuestions));
+		loadTableData();
+	}
 });
 
 // 监听cl-add-btn点击事件
@@ -935,22 +933,68 @@ setTimeout(() => {
 
 <style lang="scss" scoped>
 .fake-container {
-	padding: 20px;
+	padding: 0;
+	background: #f6f8fa;
+	min-height: 100vh;
 }
-
-.mb20 {
-	margin-bottom: 20px;
+.banner {
+	width: 100%;
+	background: linear-gradient(90deg, #1890ff 0%, #36cfc9 100%);
+	color: #fff;
+	padding: 32px 0 18px 32px;
+	margin-bottom: 18px;
+	border-radius: 0 0 12px 12px;
+	box-shadow: 0 2px 8px 0 rgba(24,144,255,0.08);
+	h1 {
+		font-size: 28px;
+		margin: 0 0 6px 0;
+		font-weight: 700;
+		letter-spacing: 1px;
+	}
+	p {
+		font-size: 15px;
+		opacity: 0.92;
+		margin: 0;
+	}
 }
-
-.ml10 {
-	margin-left: 10px;
+.filter-bar {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 12px 24px 8px 24px;
+	background: #fff;
+	border-radius: 8px;
+	margin-bottom: 10px;
+	box-shadow: 0 1px 4px 0 rgba(0,0,0,0.03);
+	.filter-input {
+		width: 200px;
+	}
+	.filter-select {
+		width: 140px;
+	}
 }
-
+.table-scroll-wrapper {
+	background: #fff;
+	border-radius: 8px;
+	margin: 0 24px 0 24px;
+	box-shadow: 0 1px 4px 0 rgba(0,0,0,0.03);
+	padding: 0 0 8px 0;
+	/* max-height: 440px; */
+	/* overflow-y: auto; */
+}
+.question-table {
+	font-size: 14px;
+}
+.pagination-bar {
+	display: flex;
+	justify-content: flex-end;
+	padding: 12px 32px 0 0;
+	background: transparent;
+}
 .dialog-footer {
 	padding: 20px 0 0;
 	text-align: right;
 }
-
 .option-item {
 	display: flex;
 	align-items: center;
@@ -960,39 +1004,31 @@ setTimeout(() => {
 		margin-right: 10px;
 	}
 }
-
 .detail-item {
 	margin-bottom: 16px;
 }
-
 .detail-item .label {
 	font-weight: bold;
 	margin-bottom: 5px;
 }
-
 .detail-item .content {
 	line-height: 1.5;
 }
-
 .detail-item ul {
 	margin: 0;
 	padding-left: 20px;
 }
-
 :deep(.cl-filter) {
 	.el-select {
 		width: 100%;
 	}
 }
-
 :deep(.el-form-item) {
 	margin-bottom: 18px;
 }
-
 :deep(.el-form-item__label) {
 	font-weight: 500;
 }
-
 :deep(.el-upload) {
 	width: 100%;
 	
@@ -1000,8 +1036,14 @@ setTimeout(() => {
 		width: 100%;
 	}
 }
-
 :deep(.el-dialog__body) {
 	padding: 20px;
+}
+.action-btns {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
 }
 </style>
