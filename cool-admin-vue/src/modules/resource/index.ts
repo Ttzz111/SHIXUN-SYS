@@ -35,6 +35,13 @@ export default () => {
 				meta: {
 					title: "资源审核"
 				}
+			},
+			{
+				path: "/resource/upload",
+				component: () => import("./views/uploadstu.vue"),
+				meta: {
+					title: "资源上传"
+				}
 			}
 		],
 		app

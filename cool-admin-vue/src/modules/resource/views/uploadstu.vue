@@ -1,17 +1,17 @@
 <template>
 	<div class="resource-upload page-container">
+		<!-- 蓝色横幅Banner -->
+		<div class="banner-box">
+			<h1>资源上传</h1>
+			<p>上传的资源将经过教师审核后发布，支持文档、图片、视频等多种格式</p>
+		</div>
+		
 		<!-- 操作栏 -->
 		<cl-crud ref="Crud">
-			<cl-row>
-				<div class="page-header">
-					<h2 class="page-title">资源上传</h2>
-					<p class="subtitle">上传的资源将经过教师审核后发布</p>
-				</div>
-			</cl-row>
-			
 			<!-- 上传表单区域 -->
-			<cl-row>
-				<el-card class="upload-card">
+			<div class="content-box">
+				<div class="section-title">资源上传</div>
+				<el-card class="upload-card" shadow="never">
 					<el-form 
 						:model="resourceForm" 
 						:rules="rules" 
@@ -92,24 +92,23 @@
 						</el-form-item>
 					</el-form>
 				</el-card>
-			</cl-row>
+			</div>
 			
 			<!-- 我的上传记录区域 -->
-			<cl-row>
-				<el-card class="my-resources-card">
-					<template #header>
-						<div class="card-header">
-							<div class="header-left">
-								<el-icon><document /></el-icon>
-								<span>我的上传记录</span>
-							</div>
-							<div class="header-right">
-								<el-button type="primary" text @click="loadMyResources">
-									<el-icon><refresh /></el-icon> 刷新
-								</el-button>
-							</div>
+			<div class="content-box">
+				<div class="section-title">我的上传记录</div>
+				<el-card class="my-resources-card" shadow="never">
+					<div class="card-header">
+						<div class="header-left">
+							<el-icon><document /></el-icon>
+							<span>我的上传记录</span>
 						</div>
-					</template>
+						<div class="header-right">
+							<el-button type="primary" text @click="loadMyResources">
+								<el-icon><refresh /></el-icon> 刷新
+							</el-button>
+						</div>
+					</div>
 					
 					<div class="table-container">
 						<el-table 
@@ -171,12 +170,14 @@
 						</el-table>
 						
 						<div class="pagination-row">
-							<cl-flex1 />
+							<div class="pagination-info">
+								共 <span class="total-count">{{ total }}</span> 条，当前 {{ (currentPage - 1) * pageSize + 1 }}-{{ Math.min(currentPage * pageSize, total) }} 条
+							</div>
 							<el-pagination
 								v-model:current-page="currentPage"
 								v-model:page-size="pageSize"
 								:page-sizes="[5, 10, 20, 50]"
-								layout="total, sizes, prev, pager, next, jumper"
+								layout="sizes, prev, pager, next, jumper"
 								:total="total"
 								@size-change="handleSizeChange"
 								@current-change="handleCurrentChange"
@@ -191,7 +192,7 @@
 						></el-empty>
 					</div>
 				</el-card>
-			</cl-row>
+			</div>
 		</cl-crud>
 		
 		<!-- 资源预览对话框 -->
@@ -205,8 +206,25 @@
 			<div class="preview-container" v-loading="previewDialog.loading">
 				<!-- 文档预览 -->
 				<div v-if="previewDialog.data.type === 'document'" class="document-preview">
-					<iframe v-if="previewDialog.url" :src="previewDialog.url" width="100%" height="500"></iframe>
-					<el-empty v-else description="无法预览此类文档"></el-empty>
+					<div v-if="previewDialog.url">
+						<!-- PDF文件直接使用iframe预览 -->
+						<iframe 
+							v-if="getFileExtension(previewDialog.data.name) === 'pdf'"
+							:src="previewDialog.url" 
+							width="100%" 
+							height="500"
+						></iframe>
+						<!-- 其他文档类型提供下载链接 -->
+						<div v-else class="document-download">
+							<el-icon :size="64" color="#409EFF"><document /></el-icon>
+							<p>{{ previewDialog.data.name }}</p>
+							<p class="file-info">{{ formatFileSize(previewDialog.data.size) }} | {{ getFileExtension(previewDialog.data.name).toUpperCase() }}</p>
+							<el-button type="primary" @click="downloadFile(previewDialog.url, previewDialog.data.name)">
+								<el-icon><download /></el-icon> 下载文件
+							</el-button>
+						</div>
+					</div>
+					<el-empty v-else description="无法加载此文档"></el-empty>
 				</div>
 				
 				<!-- 图片预览 -->
@@ -221,15 +239,25 @@
 				
 				<!-- 视频预览 -->
 				<div v-else-if="previewDialog.data.type === 'video'" class="video-preview">
-					<video controls style="width: 100%; max-height: 500px;">
-						<source :src="previewDialog.url" type="video/mp4">
+					<video 
+						controls 
+						style="width: 100%; max-height: 500px;"
+						:src="previewDialog.url"
+					>
 						您的浏览器不支持视频标签
 					</video>
 				</div>
 				
 				<!-- 其他类型 -->
 				<div v-else class="other-preview">
-					<el-empty description="无法预览此类型的文件"></el-empty>
+					<div class="document-download">
+						<el-icon :size="64" color="#909399"><folder /></el-icon>
+						<p>{{ previewDialog.data.name }}</p>
+						<p class="file-info">{{ formatFileSize(previewDialog.data.size) }}</p>
+						<el-button type="primary" @click="downloadFile(previewDialog.url, previewDialog.data.name)">
+							<el-icon><download /></el-icon> 下载文件
+						</el-button>
+					</div>
 				</div>
 			</div>
 		</el-dialog>
@@ -237,11 +265,18 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, reactive, onMounted, computed } from 'vue';
+import { ref, reactive, onMounted, computed, onBeforeUnmount } from 'vue';
 import { ElMessage, ElMessageBox, FormInstance } from 'element-plus';
-import { Search, Refresh, Document, UploadFilled } from '@element-plus/icons-vue';
+import { Search, Refresh, Document, UploadFilled, Download, Folder } from '@element-plus/icons-vue';
 import { useCool } from '/@/cool';
 import { useBase } from '/$/base';
+import { 
+	addResource, 
+	getResources, 
+	deleteResource as deleteResourceFromDB, 
+	createResourceUrl, 
+	updateResourceStatus 
+} from '../utils/indexedDB';
 
 // 获取用户信息
 const { user } = useBase();
@@ -338,57 +373,8 @@ const total = ref(0);
 // 我的资源列表
 const myResources = ref<any[]>([]);
 
-// 模拟用户上传的资源数据
-const mockUserResources = [
-	{
-		id: 201,
-		name: '工程创客训练：3D打印连环画设计与制作.mp4',
-		type: 'video',
-		categoryId: 103,
-		categoryName: '工程训练III',
-		author: user.info?.name || '当前用户',
-		size: 1024 * 1024 * 120, // 120MB
-		createTime: '2025-05-17 10:00:00',
-		status: 'approved',
-		description: '3D打印连环画设计与制作全过程视频。'
-	},
-	{
-		id: 202,
-		name: '匠心训练——基于RFID的物流分拣系统.pdf',
-		type: 'video',
-		categoryId: 101,
-		categoryName: '工程训练IA',
-		author: user.info?.name || '当前用户',
-		size: 1024 * 1024 * 167, // 5.2MB
-		createTime: '2025-05-17 10:10:00',
-		status: 'approved',
-		description: '基于RFID的物流分拣系统设计与实现文档。'
-	},
-	{
-		id: 203,
-		name: '工程创客训练：基于vslam的多旋翼自主无人机的设计、制造和调试.pdf',
-		type: 'video',
-		categoryId: 103,
-		categoryName: '工程训练III',
-		author: user.info?.name || '当前用户',
-		size: 1024 * 1024 * 230, // 230MB
-		createTime: '2025-05-17 10:20:00',
-		status: 'approved',
-		description: '多旋翼自主无人机的设计、制造和调试详细资料。'
-	},
-	{
-		id: 204,
-		name: '工程创客训练：献礼百廿河工-基于工大元素的文创产品的设计与制作.pdf',
-		type: 'video',
-		categoryId: 103,
-		categoryName: '工程训练III',
-		author: user.info?.name || '当前用户',
-		size: 1024 * 1024 * 251, // 6.3MB
-		createTime: '2025-05-17 10:30:00',
-		status: 'approved',
-		description: '基于工大元素的文创产品设计与制作资料。'
-	}
-];
+// 存储创建的URL，以便在组件销毁时释放
+const createdUrls = ref<string[]>([]);
 
 // 获取资源类型名称
 function getResourceTypeName(type: string) {
@@ -481,7 +467,7 @@ function handleUpload(options: any) {
 }
 
 // 提交表单
-function submitForm() {
+async function submitForm() {
 	if (!formRef.value) return;
 	
 	formRef.value.validate(async (valid) => {
@@ -494,31 +480,30 @@ function submitForm() {
 			submitting.value = true;
 			
 			try {
-				// 模拟API请求
-				await new Promise(resolve => setTimeout(resolve, 1500));
-				
-				// 资源提交成功后，添加到我的资源列表
+				// 获取分类名称
 				const categoryName = getCategoryName(resourceForm.categoryId);
 				
 				// 创建新资源对象
 				const newResource = {
-					id: Date.now(),
 					name: resourceForm.name,
 					type: resourceForm.type,
 					categoryId: resourceForm.categoryId,
 					categoryName,
+					userId: user.info?.id || 'anonymous',
 					author: user.info?.name || '当前用户',
 					size: resourceForm.file.size,
 					createTime: new Date().toLocaleString(),
 					status: 'pending',
-					description: resourceForm.description
+					description: resourceForm.description,
+					viewCount: 0,
+					downloadCount: 0
 				};
 				
-				// 添加到模拟数据中
-				mockUserResources.unshift(newResource);
+				// 使用IndexedDB存储资源
+				await addResource(newResource, resourceForm.file);
 				
 				// 更新页面数据
-				loadMyResources();
+				await loadMyResources();
 				
 				// 提示用户
 				ElMessage.success('资源提交成功，等待管理员审核');
@@ -561,45 +546,72 @@ function resetForm() {
 }
 
 // 加载我的资源列表
-function loadMyResources() {
+async function loadMyResources() {
 	loading.value = true;
 	
-	// 模拟API请求
-	setTimeout(() => {
+	try {
+		// 从IndexedDB获取当前用户的资源
+		const resources = await getResources({ userId: user.info?.id || 'anonymous' });
+		
 		// 计算总数
-		total.value = mockUserResources.length;
+		total.value = resources.length;
 		
 		// 分页处理
 		const start = (currentPage.value - 1) * pageSize.value;
 		const end = start + pageSize.value;
-		myResources.value = mockUserResources.slice(start, end);
+		myResources.value = resources.slice(start, end);
 		
 		loading.value = false;
-	}, 500);
+	} catch (error) {
+		console.error('加载资源列表失败:', error);
+		loading.value = false;
+		ElMessage.error('加载资源列表失败');
+	}
+}
+
+// 获取文件扩展名
+function getFileExtension(filename: string): string {
+	return filename.slice((filename.lastIndexOf('.') - 1 >>> 0) + 2).toLowerCase();
+}
+
+// 下载文件
+function downloadFile(url: string, filename: string) {
+	if (!url) return;
+	
+	const a = document.createElement('a');
+	a.href = url;
+	a.download = filename;
+	document.body.appendChild(a);
+	a.click();
+	document.body.removeChild(a);
+	
+	ElMessage.success('下载开始');
 }
 
 // 预览资源
-function previewResource(row: any) {
+async function previewResource(row: any) {
 	previewDialog.data = row;
 	previewDialog.title = `预览: ${row.name}`;
 	previewDialog.loading = true;
 	previewDialog.visible = true;
+	previewDialog.url = '';
 	
-	// 模拟获取预览URL
-	setTimeout(() => {
-		// 这里应该是从后端获取实际的URL
-		if (row.type === 'document') {
-			previewDialog.url = 'https://mozilla.github.io/pdf.js/web/viewer.html';
-		} else if (row.type === 'image') {
-			previewDialog.url = 'https://picsum.photos/800/600';
-		} else if (row.type === 'video') {
-			previewDialog.url = 'https://www.w3schools.com/html/mov_bbb.mp4';
-		} else {
-			previewDialog.url = '';
-		}
+	try {
+		// 从IndexedDB获取文件并创建URL
+		const url = await createResourceUrl(row.id);
 		
+		if (url) {
+			previewDialog.url = url;
+			createdUrls.value.push(url); // 保存URL以便后续释放
+		} else {
+			ElMessage.warning('无法预览此资源');
+		}
+	} catch (error) {
+		console.error('预览资源失败:', error);
+		ElMessage.error('预览资源失败');
+	} finally {
 		previewDialog.loading = false;
-	}, 1000);
+	}
 }
 
 // 删除资源
@@ -612,16 +624,18 @@ function deleteResource(row: any) {
 			cancelButtonText: '取消',
 			type: 'warning'
 		}
-	).then(() => {
-		// 从列表中删除
-		const index = mockUserResources.findIndex(item => item.id === row.id);
-		if (index !== -1) {
-			mockUserResources.splice(index, 1);
+	).then(async () => {
+		try {
+			// 从IndexedDB中删除资源
+			await deleteResourceFromDB(row.id);
 			
 			// 更新页面数据
-			loadMyResources();
+			await loadMyResources();
 			
 			ElMessage.success('资源已删除');
+		} catch (error) {
+			console.error('删除资源失败:', error);
+			ElMessage.error('删除资源失败');
 		}
 	}).catch(() => {});
 }
@@ -639,6 +653,19 @@ function handleSizeChange(val: number) {
 	loadMyResources();
 }
 
+// 释放创建的URL
+function releaseUrls() {
+	createdUrls.value.forEach(url => {
+		URL.revokeObjectURL(url);
+	});
+	createdUrls.value = [];
+}
+
+// 组件销毁前释放资源
+onBeforeUnmount(() => {
+	releaseUrls();
+});
+
 // 页面加载时获取数据
 onMounted(() => {
 	loadMyResources();
@@ -649,69 +676,63 @@ onMounted(() => {
 .resource-upload {
 	padding: 20px;
 	height: 100%;
-	overflow: hidden;
+	overflow: auto;
 	display: flex;
 	flex-direction: column;
+	background-color: #f5f7fa;
 	
-	.page-header {
+	.banner-box {
+		background: linear-gradient(135deg, #1890ff, #096dd9);
+		color: white;
+		padding: 20px;
+		border-radius: 12px;
 		margin-bottom: 20px;
+		box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
 		
-		.page-title {
-			margin: 0 0 8px 0;
-			font-size: 22px;
-			font-weight: bold;
-			color: #303133;
+		h1 {
+			margin: 0 0 10px 0;
+			font-size: 24px;
 		}
 		
-		.subtitle {
+		p {
 			margin: 0;
-			color: #606266;
-			font-size: 14px;
+			opacity: 0.8;
 		}
 	}
 	
-	:deep(.cl-crud) {
-		height: 100%;
-		display: flex;
-		flex-direction: column;
+	.content-box {
+		margin-bottom: 20px;
 		
-		.cl-row {
+		.section-title {
+			font-size: 16px;
+			font-weight: 600;
 			margin-bottom: 15px;
+			color: #303133;
 		}
 	}
 	
 	.upload-card {
-		margin-bottom: 20px;
-		padding: 24px 18px 18px 18px;
-		border-radius: 6px;
-		box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-	}
-	
-	.resource-form {
-		margin: 0;
-		max-width: none;
+		border-radius: 12px;
+		
+		:deep(.el-card__body) {
+			padding: 20px;
+		}
 	}
 	
 	.my-resources-card {
-		padding: 12px 8px 8px 8px;
-		border-radius: 6px;
-		height: 100%;
-		display: flex;
-		flex-direction: column;
+		border-radius: 12px;
 		
 		:deep(.el-card__body) {
-			flex: 1;
 			padding: 0;
-			overflow: hidden;
-			display: flex;
-			flex-direction: column;
 		}
 		
 		.card-header {
 			display: flex;
 			justify-content: space-between;
 			align-items: center;
-			padding: 0 10px;
+			padding: 15px 20px;
+			border-bottom: 1px solid #ebeef5;
+			background-color: #f9fafc;
 			
 			.header-left {
 				display: flex;
@@ -725,19 +746,14 @@ onMounted(() => {
 				}
 			}
 		}
+	}
+	
+	.table-container {
+		padding: 20px;
 		
-		.table-container {
-			padding: 15px;
-			flex: 1;
-			display: flex;
-			flex-direction: column;
+		.el-table {
+			border-radius: 8px;
 			overflow: hidden;
-			height: 100%;
-			
-			.el-table {
-				overflow: auto;
-				flex: 1;
-			}
 		}
 	}
 	
@@ -756,6 +772,35 @@ onMounted(() => {
 		display: flex;
 		justify-content: center;
 		align-items: center;
+		
+		.document-download {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			padding: 30px;
+			text-align: center;
+			
+			p {
+				margin: 10px 0 5px;
+				font-size: 16px;
+				font-weight: 500;
+			}
+			
+			.file-info {
+				color: #909399;
+				font-size: 14px;
+				margin-bottom: 15px;
+			}
+		}
+		
+		.video-preview {
+			width: 100%;
+			
+			video {
+				border-radius: 8px;
+				background-color: #000;
+			}
+		}
 	}
 	
 	.operation-buttons {
@@ -765,14 +810,25 @@ onMounted(() => {
 		
 		.el-button {
 			margin: 0;
+			border-radius: 6px;
 		}
 	}
 	
 	.pagination-row {
 		display: flex;
-		justify-content: flex-end;
-		margin-top: 15px;
-		padding: 0 5px;
+		justify-content: space-between;
+		align-items: center;
+		margin-top: 20px;
+		
+		.pagination-info {
+			color: #606266;
+			font-size: 14px;
+			
+			.total-count {
+				color: #409EFF;
+				font-weight: bold;
+			}
+		}
 	}
 }
 
@@ -800,7 +856,7 @@ onMounted(() => {
 	flex-direction: column;
 	justify-content: center;
 	align-items: center;
-	border-radius: 4px;
+	border-radius: 8px;
 	
 	.el-icon--upload {
 		margin-bottom: 10px;
@@ -826,7 +882,7 @@ onMounted(() => {
 
 /* 对话框样式优化 */
 :deep(.el-dialog) {
-	border-radius: 4px;
+	border-radius: 8px;
 	overflow: hidden;
 	
 	.el-dialog__header {
@@ -851,7 +907,20 @@ onMounted(() => {
 	}
 }
 
-.resource-upload.page-container {
-	padding: 20px;
+/* 表单控件圆角优化 */
+:deep(.el-input .el-input__inner),
+:deep(.el-textarea .el-textarea__inner),
+:deep(.el-select .el-input .el-input__inner),
+:deep(.el-cascader .el-input .el-input__inner) {
+	border-radius: 6px;
+}
+
+:deep(.el-button) {
+	border-radius: 6px;
+}
+
+:deep(.el-card) {
+	border: none;
+	box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
 }
 </style>

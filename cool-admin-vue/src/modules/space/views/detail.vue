@@ -8,26 +8,48 @@
       <el-card shadow="hover" class="post-card">
         <!-- 帖子标题和分类 -->
         <div class="post-header">
-          <h1 class="post-title">{{ post.title }}</h1>
-          <el-tag size="medium" :type="getCategoryType(post.category)">{{ post.category }}</el-tag>
+          <div class="post-header-left">
+            <el-tag size="medium" :type="getCategoryType(post.category)" class="category-tag">{{ post.category }}</el-tag>
+            <h1 class="post-title">{{ post.title }}</h1>
+          </div>
+          <div>
+            <el-button 
+              v-if="isAdmin"
+              type="danger" 
+              size="small" 
+              icon="el-icon-delete" 
+              style="margin-left: 10px;" 
+              @click="deletePost">删除帖子</el-button>
+          </div>
         </div>
         
         <!-- 帖子元信息 -->
         <div class="post-meta">
           <div class="author-info">
-            <i class="el-icon-user"></i>
+            <el-avatar :size="40" :src="post.avatar || 'https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png'"></el-avatar>
             <span class="author-name">{{ post.author }}</span>
+            <span class="post-time">{{ post.createTime }}</span>
           </div>
-          <div class="post-time">
-            <i class="el-icon-time"></i>
-            <span>{{ post.createTime }}</span>
-          </div>
-          <div class="post-stats">
-            <span><i class="el-icon-view"></i> {{ post.views }}</span>
-            <span><i class="el-icon-chat-dot-round"></i> {{ post.comments.length }}</span>
-            <span class="like-button" @click.stop="likePost">
-              <i :class="isLiked ? 'el-icon-star-on' : 'el-icon-star-off'"></i> 
-              {{ post.likes }}
+          <div class="post-actions">
+            <span class="action-item">
+              <span class="action-icon">👁️</span> {{ post.views }}
+            </span>
+            <span class="action-item">
+              <span class="action-icon">💬</span> {{ post.comments.length }}
+            </span>
+            <span 
+              class="action-item like-btn" 
+              :class="{ 'is-liked': isLiked }" 
+              @click="toggleLike"
+            >
+              <span class="action-icon" :class="{ 'is-liked': isLiked }">♥</span> {{ post.likes }}
+            </span>
+            <span 
+              class="action-item favorite-btn" 
+              :class="{ 'is-favorited': isFavorited }" 
+              @click="toggleFavorite"
+            >
+              <span class="action-icon" :class="{ 'is-favorited': isFavorited }">★</span> {{ post.favorites || 0 }}
             </span>
           </div>
         </div>
@@ -105,14 +127,17 @@
 <script lang="ts" setup>
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { useBase } from '/$/base'
 
 const router = useRouter()
 const route = useRoute()
+const { user } = useBase()
 
 // 帖子数据
 const post = ref(null)
 const isLiked = ref(false)
+const isFavorited = ref(false)
 
 // 评论表单
 const commentForm = reactive({
@@ -140,6 +165,55 @@ const getCategoryType = (category) => {
   return types[category] || 'info'
 }
 
+// 判断当前用户是否为管理员
+const isAdmin = ref(false)
+
+// 当前用户名
+const currentUser = ref('')
+
+// 用户的收藏列表
+const userFavorites = ref([])
+
+// 用户的点赞列表
+const userLikes = ref([])
+
+// 检查用户权限
+const checkUserRole = () => {
+  // 从系统获取当前登录用户的角色
+  isAdmin.value = user.info?.roleLabel === '管理员'
+  
+  // 从系统获取当前登录用户的用户名
+  currentUser.value = user.info?.username || '游客'
+  
+  // 加载用户的收藏和点赞数据
+  loadUserData()
+}
+
+// 加载用户数据
+const loadUserData = () => {
+  const storedFavorites = localStorage.getItem(`userFavorites_${currentUser.value}`)
+  if (storedFavorites) {
+    userFavorites.value = JSON.parse(storedFavorites)
+  }
+  
+  const storedLikes = localStorage.getItem(`userLikes_${currentUser.value}`)
+  if (storedLikes) {
+    userLikes.value = JSON.parse(storedLikes)
+  }
+  
+  // 如果帖子已加载，检查点赞和收藏状态
+  if (post.value) {
+    isLiked.value = userLikes.value.includes(post.value.id)
+    isFavorited.value = userFavorites.value.includes(post.value.id)
+  }
+}
+
+// 保存用户数据
+const saveUserData = () => {
+  localStorage.setItem(`userFavorites_${currentUser.value}`, JSON.stringify(userFavorites.value))
+  localStorage.setItem(`userLikes_${currentUser.value}`, JSON.stringify(userLikes.value))
+}
+
 // 加载帖子数据
 const loadPost = () => {
   const postId = Number(route.query.id)
@@ -160,9 +234,9 @@ const loadPost = () => {
       
       post.value = foundPost
       
-      // 检查是否已点赞
-      const likedPosts = JSON.parse(localStorage.getItem('forumLikedPosts') || '[]')
-      isLiked.value = likedPosts.includes(postId)
+      // 检查是否已点赞和收藏
+      isLiked.value = userLikes.value.includes(postId)
+      isFavorited.value = userFavorites.value.includes(postId)
     } else {
       post.value = null
     }
@@ -176,46 +250,96 @@ const goBack = () => {
   router.push('/forum')
 }
 
-// 点赞帖子
-const likePost = () => {
+// 切换点赞状态
+const toggleLike = () => {
   if (!post.value) return
   
   const postId = post.value.id
-  const likedPosts = JSON.parse(localStorage.getItem('forumLikedPosts') || '[]')
+  const index = userLikes.value.indexOf(postId)
   
-  if (isLiked.value) {
-    // 取消点赞
-    post.value.likes -= 1
-    const index = likedPosts.indexOf(postId)
-    if (index > -1) {
-      likedPosts.splice(index, 1)
-    }
-    isLiked.value = false
-    ElMessage({
-      type: 'info',
-      message: '已取消点赞'
-    })
-  } else {
-    // 点赞
-    post.value.likes += 1
-    likedPosts.push(postId)
+  // 获取最新的帖子数据
+  const storedPosts = JSON.parse(localStorage.getItem('forumPosts'))
+  const postIndex = storedPosts.findIndex(p => p.id === postId)
+  if (postIndex === -1) return
+  
+  if (index === -1) {
+    // 添加点赞
+    userLikes.value.push(postId)
+    // 确保使用存储中的最新点赞数
+    storedPosts[postIndex].likes += 1
+    post.value.likes = storedPosts[postIndex].likes
     isLiked.value = true
     ElMessage({
       type: 'success',
-      message: '点赞成功'
+      message: '点赞成功！',
+      duration: 1000
+    })
+  } else {
+    // 取消点赞
+    userLikes.value.splice(index, 1)
+    // 确保使用存储中的最新点赞数
+    storedPosts[postIndex].likes = Math.max(0, storedPosts[postIndex].likes - 1)
+    post.value.likes = storedPosts[postIndex].likes
+    isLiked.value = false
+    ElMessage({
+      type: 'info',
+      message: '已取消点赞',
+      duration: 1000
     })
   }
   
-  // 更新localStorage
-  localStorage.setItem('forumLikedPosts', JSON.stringify(likedPosts))
+  // 更新本地存储
+  saveUserData()
+  localStorage.setItem('forumPosts', JSON.stringify(storedPosts))
+}
+
+// 切换收藏状态
+const toggleFavorite = () => {
+  if (!post.value) return
   
-  // 更新帖子数据
+  const postId = post.value.id
+  const index = userFavorites.value.indexOf(postId)
+  
+  // 获取最新的帖子数据
   const storedPosts = JSON.parse(localStorage.getItem('forumPosts'))
   const postIndex = storedPosts.findIndex(p => p.id === postId)
-  if (postIndex > -1) {
-    storedPosts[postIndex].likes = post.value.likes
-    localStorage.setItem('forumPosts', JSON.stringify(storedPosts))
+  if (postIndex === -1) return
+  
+  if (index === -1) {
+    // 添加收藏
+    userFavorites.value.push(postId)
+    // 确保使用存储中的最新收藏数
+    storedPosts[postIndex].favorites = (storedPosts[postIndex].favorites || 0) + 1
+    post.value.favorites = storedPosts[postIndex].favorites
+    isFavorited.value = true
+    ElMessage({
+      type: 'success',
+      message: '收藏成功！',
+      duration: 1000
+    })
+  } else {
+    // 取消收藏
+    userFavorites.value.splice(index, 1)
+    // 确保使用存储中的最新收藏数
+    storedPosts[postIndex].favorites = Math.max(0, (storedPosts[postIndex].favorites || 0) - 1)
+    post.value.favorites = storedPosts[postIndex].favorites
+    isFavorited.value = false
+    ElMessage({
+      type: 'info',
+      message: '已取消收藏',
+      duration: 1000
+    })
   }
+  
+  // 更新本地存储
+  saveUserData()
+  localStorage.setItem('forumPosts', JSON.stringify(storedPosts))
+}
+
+// 更新帖子数据到本地存储 - 不再需要，上面已直接更新
+const updatePostInStorage = () => {
+  // 此方法已在toggleLike和toggleFavorite中直接实现
+  console.log('This method is deprecated')
 }
 
 // 提交评论
@@ -254,17 +378,58 @@ const submitComment = () => {
   })
 }
 
+// 删除帖子
+const deletePost = () => {
+  if (!post.value) return
+  
+  ElMessageBox.confirm('确定要删除这篇帖子吗？此操作不可恢复', '提示', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).then(() => {
+    if (!post.value) return
+    
+    const postId = post.value.id
+    const storedPosts = JSON.parse(localStorage.getItem('forumPosts') || '[]')
+    const index = storedPosts.findIndex(p => p.id === postId)
+    
+    if (index > -1) {
+      storedPosts.splice(index, 1)
+      localStorage.setItem('forumPosts', JSON.stringify(storedPosts))
+      
+      ElMessage({
+        type: 'success',
+        message: '帖子已删除'
+      })
+      
+      // 删除后返回论坛首页
+      router.push('/forum')
+    }
+  }).catch(() => {
+    // 用户取消删除操作
+  })
+}
+
 // 页面加载时获取数据
 onMounted(() => {
+  checkUserRole()
   loadPost()
+  
+  // 设置默认作者为当前用户
+  if (currentUser.value !== '游客') {
+    commentForm.author = currentUser.value
+  }
 })
 </script>
 
 <style scoped>
 .detail-container {
   padding: 20px;
-  max-width: 900px;
+  max-width: 90%;
   margin: 0 auto;
+  height: 100%;
+  overflow-y: auto;
+  background-color: #f5f7fa;
 }
 
 .back-button {
@@ -281,6 +446,15 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 15px;
+}
+
+.post-header-left {
+  display: flex;
+  align-items: center;
+}
+
+.category-tag {
+  margin-right: 15px;
 }
 
 .post-title {
@@ -300,28 +474,65 @@ onMounted(() => {
   font-size: 14px;
 }
 
-.author-info, .post-time {
+.author-info {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 10px;
 }
 
-.post-stats {
+.author-name {
+  font-weight: 500;
+  color: #606266;
+}
+
+.post-time {
+  color: #909399;
+  font-size: 12px;
+}
+
+.post-actions {
   display: flex;
+  align-items: center;
   gap: 15px;
 }
 
-.like-button {
+.action-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   cursor: pointer;
-  transition: color 0.2s;
 }
 
-.like-button:hover {
-  color: #409EFF;
+.action-icon {
+  font-size: 16px;
 }
 
-.el-icon-star-on {
-  color: #F56C6C;
+.like-btn, .favorite-btn {
+  transition: all 0.3s;
+}
+
+.like-btn:hover {
+  color: #ff6b6b;
+}
+
+.favorite-btn:hover {
+  color: #ffc107;
+}
+
+.like-btn.is-liked {
+  color: #ff6b6b;
+}
+
+.favorite-btn.is-favorited {
+  color: #ffc107;
+}
+
+.like-btn .action-icon.is-liked {
+  color: #ff6b6b;
+}
+
+.favorite-btn .action-icon.is-favorited {
+  color: #ffc107;
 }
 
 .post-content {
@@ -329,6 +540,7 @@ onMounted(() => {
   font-size: 16px;
   color: #303133;
   white-space: pre-wrap;
+  padding: 10px 0;
 }
 
 .comments-card {
@@ -402,5 +614,8 @@ onMounted(() => {
 .post-not-found {
   padding: 50px 0;
   text-align: center;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
 }
 </style>

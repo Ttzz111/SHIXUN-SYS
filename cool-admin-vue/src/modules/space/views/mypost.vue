@@ -113,8 +113,13 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { useBase } from '/$/base'
 
 const router = useRouter()
+const { user } = useBase()
+
+// 当前用户信息
+const currentUser = ref('')
 
 // 筛选表单
 const filterForm = reactive({
@@ -139,6 +144,18 @@ const totalLikes = computed(() => {
 const totalViews = computed(() => {
   return myPosts.value.reduce((sum, post) => sum + post.views, 0)
 })
+
+// 获取当前用户信息
+const getUserInfo = () => {
+  // 从系统获取当前登录用户的用户名
+  currentUser.value = user.info?.username || '游客'
+  
+  // 自动填充作者字段
+  if (currentUser.value !== '游客') {
+    filterForm.author = currentUser.value
+    loadMyPosts()
+  }
+}
 
 // 根据分类返回不同的标签类型
 const getCategoryType = (category) => {
@@ -178,8 +195,8 @@ const loadMyPosts = () => {
 
 // 重置筛选条件
 const resetFilter = () => {
-  filterForm.author = ''
-  myPosts.value = []
+  filterForm.author = currentUser.value !== '游客' ? currentUser.value : ''
+  loadMyPosts()
 }
 
 // 查看帖子详情
@@ -225,6 +242,7 @@ const goToForum = () => {
 
 // 页面加载时获取数据
 onMounted(() => {
+  getUserInfo()
   loadAllPosts()
 })
 

@@ -308,43 +308,26 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, reactive, onMounted, computed, nextTick } from 'vue';
+import { ref, reactive, onMounted, computed, nextTick, onBeforeUnmount } from 'vue';
 import { Search, Calendar, View, Refresh, Plus, UploadFilled, Delete, Download, User } from '@element-plus/icons-vue';
 import { useCool } from '/@/cool';
-import { useBase } from '/$/base';
-import { ElMessage, ElMessageBox, FormInstance } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import dayjs from 'dayjs';
+import { useBase } from '/$/base';
 import { checkPerm } from '/$/base/utils/permission';
 import { useStorage } from '@vueuse/core';
+import { 
+	getResources, 
+	createResourceUrl 
+} from '../utils/indexedDB';
 
 // const { service } = useCool();
-// const { user, menu } = useBase();
-
-// 使用持久化存储资源数据
-const resourceCache = useStorage('resource-data-cache', null);
-
-// 获取用户信息
 const { user } = useBase();
 
-// 判断当前用户是否为管理员
-const isAdmin = computed(() => {
-	return user.info?.username === 'admin';
-});
-
-// 检查当前用户是否有资源管理权限
-const hasResourceManagePermission = computed(() => {
-	return isAdmin.value || checkPerm('resource/management');
-});
-
-// 检查当前用户是否有资源上传权限
-const hasResourceUploadPermission = computed(() => {
-	return isAdmin.value || checkPerm('resource/upload');
-});
-
-// 检查当前用户是否有资源删除权限
-const hasResourceDeletePermission = computed(() => {
-	return isAdmin.value || checkPerm('resource/delete');
-});
+// 权限检查
+const hasResourceManagePermission = computed(() => checkPerm(['resource:manage']) || user.info?.roleIds?.includes(1));
+const hasResourceUploadPermission = computed(() => checkPerm(['resource:upload']) || hasResourceManagePermission.value);
+const hasResourceDeletePermission = computed(() => checkPerm(['resource:delete']) || hasResourceManagePermission.value);
 
 // 搜索条件
 const search = reactive({
@@ -397,124 +380,18 @@ const resourceTypes = ref([
 	{ label: '压缩包', value: 'archive', icon: 'folder' }
 ]);
 
-// 对话框相关
-const dialogVisible = ref(false);
-const formRef = ref<FormInstance>();
-const resourceForm = reactive({
-	name: '',
-	description: '',
-	type: 'document',
-	categoryId: null,
-	coverUrl: '',
-	file: null
-});
+// 存储创建的URL，以便在组件销毁时释放
+const createdUrls = ref<string[]>([]);
 
-// 表单验证规则
-const rules = {
-	name: [{ required: true, message: '请输入资源名称', trigger: 'blur' }],
-	categoryId: [{ required: true, message: '请选择资源分类', trigger: 'change' }],
-	type: [{ required: true, message: '请选择资源类型', trigger: 'change' }],
-	file: [{ required: true, message: '请上传资源文件', trigger: 'change' }]
-};
+// 视频预览对话框
+const videoPreviewDialog = ref(false);
+const currentVideoUrl = ref('');
 
-// 批量选择相关
-const multipleSelection = computed(() => {
-	return list.value.filter(item => item.selected);
-});
+// 多选数据
+const multipleSelection = ref<any[]>([]);
 
-// 是否已选中
-function isSelected(item: any) {
-	return item.selected;
-}
-
-// 切换选择状态
-function toggleSelection(item: any) {
-	if (hasResourceDeletePermission.value) {
-		item.selected = !item.selected;
-	}
-}
-
-// 删除资源ID存储
-const deletedResourceIds = useStorage('resource-deleted-ids', [] as number[]);
-
-// 批量删除
-function onBatchDelete() {
-	if (multipleSelection.value.length === 0) {
-		ElMessage.warning('请至少选择一项');
-		return;
-	}
-
-	const names = multipleSelection.value.map(item => item.name).join('、');
-	
-	ElMessageBox.confirm(
-		`确定要删除 ${multipleSelection.value.length} 项资源吗？包括：${names.length > 50 ? names.substring(0, 50) + '...' : names}`,
-		'批量删除',
-		{
-			confirmButtonText: '确定删除',
-			cancelButtonText: '取消',
-			type: 'warning',
-			closeOnClickModal: false
-		}
-	).then(() => {
-		// 显示加载
-		loading.value = true;
-		
-		// 模拟删除请求
-		setTimeout(() => {
-			// 获取选中项的ID列表
-			const ids = multipleSelection.value.map(item => item.id);
-			
-			// 存储已删除的资源ID到本地存储
-			deletedResourceIds.value = [...new Set([...deletedResourceIds.value, ...ids])];
-			
-			// 从列表中移除选中项
-			list.value = list.value.filter(item => !ids.includes(item.id));
-			
-			// 更新总数
-			page.total = Math.max(0, page.total - ids.length);
-			
-			// 如果当前页已经没有数据，且不是第一页，则跳转到上一页
-			if (list.value.length === 0 && page.currentPage > 1) {
-				page.currentPage--;
-				getResourceList();
-			}
-			
-			loading.value = false;
-			ElMessage.success(`已删除 ${ids.length} 项资源`);
-		}, 800);
-	}).catch(() => {
-		ElMessage.info('已取消删除');
-	});
-}
-
-// 存储页面状态
-const savePageState = () => {
-	const state = {
-		categoryId: categoryId.value,
-		resourceType: resourceType.value,
-		search: search.keyword,
-		page: page.currentPage,
-		pageSize: page.pageSize
-	};
-	useStorage('resource-category-state', state).value = state;
-};
-
-// 获取页面状态
-const getPageState = () => {
-	const state = useStorage('resource-category-state', {
-		categoryId: 0,
-		resourceType: '',
-		search: '',
-		page: 1,
-		pageSize: 12
-	}).value;
-	
-	categoryId.value = state.categoryId;
-	resourceType.value = state.resourceType;
-	search.keyword = state.search;
-	page.currentPage = state.page;
-	page.pageSize = state.pageSize;
-};
+// 已删除的资源ID
+const deletedResourceIds = useStorage('deleted-resources', [] as number[]);
 
 // 为资源类型标签提供不同颜色
 function getTagType(type: string): '' | 'success' | 'warning' | 'danger' | 'info' {
@@ -581,361 +458,83 @@ function onRefresh() {
 
 // 添加资源
 function onAddResource() {
-	// 重置表单
-	resourceForm.name = '';
-	resourceForm.type = resourceTypes.value[0].value;
-	resourceForm.categoryId = categoryList.value[0].id;
-	resourceForm.description = '';
-	resourceForm.file = null;
-	resourceForm.coverUrl = '';
-	
-	// 显示对话框
-	dialogVisible.value = true;
-	
-	// 等待DOM更新后重置表单验证状态
-	nextTick(() => {
-		if (formRef.value) {
-			formRef.value.resetFields();
-		}
+	ElMessageBox.alert('请前往资源上传页面上传资源', '添加资源', {
+		confirmButtonText: '确定'
 	});
 }
 
-// 删除资源
-function onDeleteResource(item: any) {
+// 批量删除
+function onBatchDelete() {
+	if (multipleSelection.value.length === 0) {
+		ElMessage.warning('请选择要删除的资源');
+		return;
+	}
+	
 	ElMessageBox.confirm(
-		`确定要删除资源 "${item.name}" 吗？此操作不可逆。`,
-		'警告',
+		`确定要删除所选的 ${multipleSelection.value.length} 个资源吗？`,
+		'批量删除',
 		{
-			confirmButtonText: '确定删除',
+			confirmButtonText: '确定',
 			cancelButtonText: '取消',
-			type: 'warning',
-			closeOnClickModal: false
+			type: 'warning'
 		}
 	).then(() => {
-		// 显示加载
-		loading.value = true;
+		// 将选中的资源ID添加到已删除列表
+		const ids = multipleSelection.value.map(item => item.id);
+		deletedResourceIds.value = [...deletedResourceIds.value, ...ids];
 		
-		// 模拟后端删除请求
-		setTimeout(() => {
-			// 存储已删除的资源ID到本地存储
-			deletedResourceIds.value = [...new Set([...deletedResourceIds.value, item.id])];
-			
-			// 从列表中移除该项
-			const index = list.value.findIndex(i => i.id === item.id);
-			if (index !== -1) {
-				list.value.splice(index, 1);
-			}
-			
-			// 重新计算总数
-			page.total = Math.max(0, page.total - 1);
-			
-			// 如果当前页已经没有数据，且不是第一页，则跳转到上一页
-			if (list.value.length === 0 && page.currentPage > 1) {
-				page.currentPage--;
-				getResourceList();
-			}
-			
-			loading.value = false;
-			ElMessage.success(`已删除资源: ${item.name}`);
-		}, 800);
-	}).catch(() => {
-		ElMessage.info('已取消删除');
-	});
-}
-
-// 文件上传变化处理
-function handleFileChange(file) {
-	if (!file) return;
-	let raw = file.raw || file.file;
-	if (!raw) return;
-
-	// 文件大小校验（500MB）
-	const isLt500M = raw.size / 1024 / 1024 < 500;
-	if (!isLt500M) {
-		ElMessage.error('文件大小不能超过 500MB!');
-		return;
-	}
-	resourceForm.file = raw;
-
-	// 图片类型，直接用图片本地URL
-	if (raw.type.startsWith('image/')) {
-		resourceForm.coverUrl = URL.createObjectURL(raw);
-	}
-	// 视频类型，自动生成首帧
-	else if (raw.type.startsWith('video/')) {
-		getVideoCover(raw).then(base64 => {
-			resourceForm.coverUrl = base64;
-		});
-	}
-	// 其他类型，清空封面
-	else {
-		resourceForm.coverUrl = '';
-	}
-}
-
-// 获取视频首帧
-function getVideoCover(file) {
-	return new Promise((resolve) => {
-		const video = document.createElement('video');
-		video.preload = 'metadata';
-		video.muted = true;
-		video.src = URL.createObjectURL(file);
-		video.currentTime = 0.1;
-		video.onloadeddata = function () {
-			const canvas = document.createElement('canvas');
-			canvas.width = video.videoWidth;
-			canvas.height = video.videoHeight;
-			const ctx = canvas.getContext('2d');
-			ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-			resolve(canvas.toDataURL('image/png'));
-		};
-		video.onerror = function () {
-			resolve('');
-		};
-	});
-}
-
-// 提交表单
-async function submitResourceForm() {
-	if (!formRef.value) return;
-	
-	// 手动检查文件是否已上传
-	if (!resourceForm.file) {
-		ElMessage.error('请上传资源文件');
-		return;
-	}
-	
-	formRef.value.validate(async (valid) => {
-		if (valid) {
-			loading.value = true;
-			
-			try {
-				// 创建FormData对象用于文件上传
-				const formData = new FormData();
-				formData.append('name', resourceForm.name);
-				formData.append('categoryId', resourceForm.categoryId.toString());
-				formData.append('type', resourceForm.type);
-				formData.append('description', resourceForm.description || '');
-				formData.append('file', resourceForm.file);
-				
-				if (resourceForm.coverUrl && resourceForm.coverUrl.startsWith('data:')) {
-					// 将Base64转换为Blob
-					const coverBlob = await dataURLtoBlob(resourceForm.coverUrl);
-					formData.append('cover', coverBlob, 'cover.jpg');
-				}
-				
-				// 显示上传进度
-				ElMessage.info('文件上传中...');
-				
-				// 实际项目中，应调用后端API上传文件，例如：
-				// const res = await service.resource.upload(formData);
-				
-				// 模拟文件上传过程
-				setTimeout(async () => {
-					// 为新资源生成ID
-					let maxId = 0;
-					
-					if (resourceCache.value && Array.isArray(resourceCache.value)) {
-						const existingIds = resourceCache.value.map(item => item.id);
-						maxId = existingIds.length > 0 ? Math.max(...existingIds) : 0;
-					}
-					
-					const newId = maxId + 1;
-					
-					// 生成URL
-					let fileUrl = '#';
-					try {
-						// 创建资源URL
-						fileUrl = URL.createObjectURL(resourceForm.file);
-					} catch (e) {
-						console.error('创建URL失败:', e);
-						fileUrl = '#';
-					}
-					
-					// 构建新资源数据
-					const newResource = {
-						id: newId,
-						name: resourceForm.name,
-						description: resourceForm.description || `这是资源${newId}的详细描述`,
-						type: resourceForm.type,
-						categoryId: resourceForm.categoryId,
-						categoryName: categoryList.value.find(item => item.id === resourceForm.categoryId)?.name || '未分类',
-						url: fileUrl,
-						coverUrl: resourceForm.coverUrl || `https://picsum.photos/300/200?random=${newId}`,
-						viewCount: 0,
-						downloadCount: 0,
-						createTime: new Date().toISOString(),
-						author: user.info?.username || '当前用户',
-						fileSize: resourceForm.file ? resourceForm.file.size : 0,
-						fileName: resourceForm.file ? resourceForm.file.name : '',
-						selected: false,
-						realFile: true // 标记为真实文件
-					};
-					
-					console.log('添加真实资源:', newResource);
-					
-					// 将新资源添加到缓存
-					if (resourceCache.value && Array.isArray(resourceCache.value)) {
-						resourceCache.value = [newResource, ...resourceCache.value];
-					} else {
-						resourceCache.value = [newResource];
-					}
-					
-					// 关闭对话框
-					dialogVisible.value = false;
-					
-					// 重新加载资源列表
-					getResourceList();
-					
-					ElMessage.success('资源上传成功');
-					loading.value = false;
-				}, 1500);
-			} catch (err) {
-				console.error('添加资源失败:', err);
-				ElMessage.error('添加资源失败: ' + (err.message || '未知错误'));
-				loading.value = false;
-			}
-		} else {
-			ElMessage.warning('请完善表单信息');
-			return false;
-		}
-	});
-}
-
-// 将Base64转换为Blob对象
-function dataURLtoBlob(dataURL: string): Promise<Blob> {
-	return new Promise((resolve, reject) => {
-		try {
-			// 将base64分割为mime类型和数据部分
-			const arr = dataURL.split(',');
-			const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
-			const bstr = atob(arr[1]);
-			let n = bstr.length;
-			const u8arr = new Uint8Array(n);
-			
-			while (n--) {
-				u8arr[n] = bstr.charCodeAt(n);
-			}
-			
-			resolve(new Blob([u8arr], { type: mime }));
-		} catch (e) {
-			reject(e);
-		}
-	});
-}
-
-// 根据MIME类型判断文件类型
-function getFileTypeFromMime(mimeType: string): string {
-	if (!mimeType) return 'other';
-	
-	if (mimeType.startsWith('image/')) {
-		return 'image';
-	} else if (mimeType.startsWith('video/')) {
-		return 'video';
-	} else if (mimeType.startsWith('audio/')) {
-		return 'audio';
-	} else if (
-		mimeType.includes('pdf') || 
-		mimeType.includes('word') || 
-		mimeType.includes('document') || 
-		mimeType.includes('excel') || 
-		mimeType.includes('text/')
-	) {
-		return 'document';
-	} else if (
-		mimeType.includes('zip') || 
-		mimeType.includes('compressed') || 
-		mimeType.includes('archive') ||
-		mimeType.includes('rar')
-	) {
-		return 'archive';
-	}
-	return 'other';
-}
-
-// 生成模拟数据
-function generateMockData() {
-	// 检查是否已生成过资源数据
-	if (!resourceCache.value || !Array.isArray(resourceCache.value)) {
-		// 首次生成数据
-		const resourceTypeValues = resourceTypes.value.map(item => item.value);
-		const allResources = [];
-		const TOTAL_RESOURCES = 86;
+		// 刷新列表
+		getResourceList();
 		
-		// 生成固定的资源数据集
-		for (let i = 0; i < TOTAL_RESOURCES; i++) {
-			const id = i + 1;
-			const typeIndex = i % resourceTypeValues.length;
-			const categoryIndex = i % categoryList.value.length;
-			const type = resourceTypeValues[typeIndex];
-			const category = categoryList.value[categoryIndex];
-			
-			allResources.push({
-				id,
-				name: `资源名称${i + 1}`,
-				description: `这是资源${i + 1}的详细描述，介绍了资源的内容和用途。`,
-				type,
-				categoryId: category.id,
-				categoryName: category.name,
-				url: '#',
-				coverUrl: `https://picsum.photos/300/200?random=${i}`,
-				viewCount: Math.floor(Math.random() * 1000),
-				downloadCount: Math.floor(Math.random() * 500),
-				createTime: new Date(Date.now() - Math.floor(Math.random() * 30) * 24 * 60 * 60 * 1000).toISOString(),
-				author: `用户${Math.floor(Math.random() * 10) + 1}`,
-				fileSize: Math.floor(Math.random() * 10000),
-				selected: false
-			});
-		}
-		
-		// 保存到缓存
-		resourceCache.value = allResources;
-	}
-	
-	// 从缓存获取基础数据
-	const allResources = Array.isArray(resourceCache.value) ? resourceCache.value : [];
-	
-	// 获取已删除的资源ID
-	const deletedIds = deletedResourceIds.value || [];
-	
-	// 应用筛选条件获取匹配资源
-	let matchingResources = allResources.filter(resource => {
-		// 跳过已删除的资源
-		if (deletedIds.includes(resource.id)) {
-			return false;
-		}
-		
-		// 应用筛选条件
-		const matchesCategory = categoryId.value === 0 || categoryId.value === resource.categoryId;
-		const matchesType = resourceType.value === '' || resourceType.value === resource.type;
-		const matchesKeyword = !search.keyword || resource.name.includes(search.keyword);
-		
-		return matchesCategory && matchesType && matchesKeyword;
-	});
-	
-	console.log('筛选条件:', {
+		ElMessage.success(`已删除 ${multipleSelection.value.length} 个资源`);
+		multipleSelection.value = [];
+	}).catch(() => {});
+}
+
+// 选择/取消选择资源
+function toggleSelection(item: any) {
+	item.selected = !item.selected;
+	updateMultipleSelection();
+}
+
+// 检查资源是否被选中
+function isSelected(item: any) {
+	return item.selected;
+}
+
+// 更新多选数组
+function updateMultipleSelection() {
+	multipleSelection.value = list.value.filter(item => item.selected);
+}
+
+// 保存页面状态
+function savePageState() {
+	const state = {
 		categoryId: categoryId.value,
 		resourceType: resourceType.value,
-		keyword: search.keyword
-	});
-	console.log('匹配资源数量:', matchingResources.length);
-	
-	// 计算分页
-	const filteredTotal = matchingResources.length;
-	const startIndex = (page.currentPage - 1) * page.pageSize;
-	const endIndex = startIndex + page.pageSize;
-	
-	// 获取当前页数据
-	const pageData = matchingResources.slice(startIndex, endIndex);
-	
-	return {
-		list: pageData,
-		pagination: {
-			total: filteredTotal,
-			page: page.currentPage,
-			size: page.pageSize
-		}
+		search: search.keyword,
+		page: page.currentPage,
+		pageSize: page.pageSize
 	};
+	
+	localStorage.setItem('resource-category-state', JSON.stringify(state));
+}
+
+// 获取页面状态
+function getPageState() {
+	const stateStr = localStorage.getItem('resource-category-state');
+	if (stateStr) {
+		try {
+			const state = JSON.parse(stateStr);
+			categoryId.value = state.categoryId || 0;
+			resourceType.value = state.resourceType || '';
+			search.keyword = state.search || '';
+			page.currentPage = state.page || 1;
+			page.pageSize = state.pageSize || 12;
+					} catch (e) {
+			console.error('解析页面状态失败', e);
+		}
+	}
 }
 
 // 获取资源列表
@@ -943,9 +542,45 @@ async function getResourceList() {
 	loading.value = true;
 
 	try {
-		const mockData = generateMockData();
-		list.value = mockData.list;
-		page.total = mockData.pagination.total;
+		// 从IndexedDB获取资源
+		let resources = await getResources();
+		
+		// 只显示已审核通过的资源
+		resources = resources.filter(item => item.status === 'approved');
+		
+		// 应用分类和类型过滤
+		if (categoryId.value !== 0) {
+			const targetCategory = categoryList.value.find(c => c.id === categoryId.value);
+			if (targetCategory) {
+				// 获取该分类下的所有子分类
+				const subCats = subcategories.value.filter(s => s.parentId === targetCategory.id);
+				const subCatIds = subCats.map(s => s.id);
+				resources = resources.filter(r => subCatIds.includes(r.categoryId));
+			}
+		}
+		
+		// 按类型筛选
+		if (resourceType.value) {
+			resources = resources.filter(r => r.type === resourceType.value);
+		}
+		
+		// 关键字搜索
+		if (search.keyword) {
+			const keyword = search.keyword.toLowerCase();
+			resources = resources.filter(r => 
+				r.name.toLowerCase().includes(keyword) || 
+				(r.description && r.description.toLowerCase().includes(keyword))
+			);
+		}
+		
+		// 更新分页信息
+		page.total = resources.length;
+		
+		// 分页处理
+	const startIndex = (page.currentPage - 1) * page.pageSize;
+	const endIndex = startIndex + page.pageSize;
+		list.value = resources.slice(startIndex, endIndex);
+		
 		loading.value = false;
 	} catch (err) {
 		console.error(err);
@@ -988,75 +623,6 @@ function formatDate(date: string) {
 	return dayjs(date).format('YYYY-MM-DD');
 }
 
-// 资源预览
-function onPreviewResource(item: any) {
-	if (item.type === 'video') {
-		// 视频预览
-		currentVideoUrl.value = item.url;
-		videoPreviewDialog.value = true;
-	} else if (item.type === 'image') {
-		// 图片预览
-		ElMessageBox.alert('<img src="' + item.coverUrl + '" style="max-width:100%;" />', '图片预览', {
-			dangerouslyUseHTMLString: true,
-			showConfirmButton: false,
-			callback: () => {}
-		});
-	} else {
-		// 其他类型，使用新窗口打开
-		window.open(item.url, '_blank');
-	}
-}
-
-// 资源下载
-function onDownloadResource(item: any) {
-	// 检查是否为真实文件
-	if (item.realFile && item.url && item.url !== '#') {
-		// 创建一个临时链接下载真实文件
-		const a = document.createElement('a');
-		a.style.display = 'none';
-		a.href = item.url;
-		a.download = item.fileName || (item.name + getFileExtension(item.type));
-		document.body.appendChild(a);
-		a.click();
-		document.body.removeChild(a);
-		
-		// 更新下载次数
-		item.downloadCount = (item.downloadCount || 0) + 1;
-		
-		ElMessage.success(`正在下载: ${item.name}`);
-	} else {
-		// 模拟下载行为
-		ElMessage({
-			message: `下载已开始: ${item.name}${getFileExtension(item.type)}`,
-			type: 'success',
-			duration: 2000
-		});
-		
-		// 更新下载次数
-		item.downloadCount = (item.downloadCount || 0) + 1;
-		
-		// 模拟下载完成通知
-		setTimeout(() => {
-			ElMessage({
-				message: `下载完成: ${item.name}`,
-				type: 'success'
-			});
-		}, 1500);
-	}
-}
-
-// 获取文件扩展名
-function getFileExtension(type: string): string {
-	switch(type) {
-		case 'document': return '.doc';
-		case 'video': return '.mp4';
-		case 'image': return '.jpg';
-		case 'audio': return '.mp3';
-		case 'archive': return '.zip';
-		default: return '';
-	}
-}
-
 // 格式化文件大小
 function formatFileSize(size?: number): string {
 	if (!size) return '0 B';
@@ -1073,261 +639,82 @@ function formatFileSize(size?: number): string {
 	return `${formattedSize.toFixed(2)} ${units[i]}`;
 }
 
-// 组件挂载后加载数据
-onMounted(() => {
-	// 恢复之前的筛选条件和页面状态
-	getPageState();
-	getResourceList();
-});
-
-// 添加清空删除记录的方法(可在控制台调用此函数恢复所有删除的资源)
-function clearDeletedResources() {
-	ElMessageBox.confirm(
-		'确定要清空所有删除记录吗？这将恢复所有已删除的资源。',
-		'恢复已删除资源',
-		{
-			confirmButtonText: '确定恢复',
-			cancelButtonText: '取消',
-			type: 'warning'
-		}
-	).then(() => {
-		deletedResourceIds.value = [];
-		ElMessage.success('已清空删除记录，资源已恢复');
-		getResourceList();
-	}).catch(() => {
-		ElMessage.info('已取消操作');
-	});
-}
-
-// 添加清空数据缓存的方法(可用于开发测试)
-function resetAllResources() {
-	ElMessageBox.confirm(
-		'确定要重置所有资源数据吗？这将清空缓存并重新生成资源。',
-		'重置资源数据',
-		{
-			confirmButtonText: '确定重置',
-			cancelButtonText: '取消',
-			type: 'warning'
-		}
-	).then(() => {
-		resourceCache.value = null;
-		deletedResourceIds.value = [];
-		ElMessage.success('资源数据已重置');
-		getResourceList();
-	}).catch(() => {
-		ElMessage.info('已取消操作');
-	});
-}
-
-// 示例资源数据
-const allResources = [
-	{
-		id: 1,
-		name: '工程训练IA基础教程',
-		type: 'document',
-		categoryId: 101,
-		url: 'https://example.com/doc1',
-		coverUrl: 'https://picsum.photos/300/200?random=1',
-		description: '工程训练IA的基础理论与实践指导文档',
-		viewCount: 245,
-		downloadCount: 120,
-		author: '张教授',
-		createTime: '2025-04-15T10:30:00',
-		fileSize: 15360,
-		selected: false
-	},
-	{
-		id: 2,
-		name: '激光加工实训视频教程',
-		type: 'video',
-		categoryId: 202,
-		url: 'https://example.com/video1',
-		coverUrl: 'https://picsum.photos/300/200?random=2',
-		description: '激光加工基本操作与安全规范详细视频教程',
-		viewCount: 562,
-		downloadCount: 210,
-		author: '李教授',
-		createTime: '2025-04-15T14:25:00',
-		fileSize: 512000,
-		selected: false
-	},
-	{
-		id: 3,
-		name: '工程训练II学习指南',
-		type: 'document',
-		categoryId: 102,
-		url: 'https://example.com/doc2',
-		coverUrl: 'https://picsum.photos/300/200?random=3',
-		description: '工程训练II的核心概念与实践方法总结',
-		viewCount: 321,
-		downloadCount: 180,
-		author: '王教授',
-		createTime: '2025-04-15T09:15:00',
-		fileSize: 8192,
-		selected: false
-	},
-	{
-		id: 4,
-		name: '陶艺制作流程图解',
-		type: 'image',
-		categoryId: 201,
-		url: 'https://example.com/image1',
-		coverUrl: 'https://picsum.photos/300/200?random=4',
-		description: '陶艺制作全流程高清图解与要点说明',
-		viewCount: 410,
-		downloadCount: 195,
-		author: '刘老师',
-		createTime: '2025-04-15T16:40:00',
-		fileSize: 25600,
-		selected: false
-	},
-	{
-		id: 5,
-		name: 'VR设备操作视频教程',
-		type: 'video',
-		categoryId: 301,
-		url: 'https://example.com/video2',
-		coverUrl: 'https://picsum.photos/300/200?random=5',
-		description: '虚拟仿真设备的操作方法与注意事项',
-		viewCount: 628,
-		downloadCount: 315,
-		author: '赵教授',
-		createTime: '2025-04-15T11:20:00',
-		fileSize: 768000,
-		selected: false
-	},
-	{
-		id: 6,
-		name: '工程训练III实验报告模板',
-		type: 'document',
-		categoryId: 103,
-		url: 'https://example.com/doc3',
-		coverUrl: 'https://picsum.photos/300/200?random=6',
-		description: '标准实验报告模板与填写指南',
-		viewCount: 289,
-		downloadCount: 156,
-		author: '陈教授',
-		createTime: '2025-04-15T13:45:00',
-		fileSize: 10240,
-		selected: false
-	},
-	{
-		id: 7,
-		name: '精工细铸工艺展示',
-		type: 'image',
-		categoryId: 203,
-		url: 'https://example.com/image2',
-		coverUrl: 'https://picsum.photos/300/200?random=7',
-		description: '精工细铸工艺过程高清图片集',
-		viewCount: 378,
-		downloadCount: 245,
-		author: '周老师',
-		createTime: '2025-04-15T15:30:00',
-		fileSize: 30720,
-		selected: false
-	},
-	{
-		id: 8,
-		name: '工程认知训练音频讲解',
-		type: 'audio',
-		categoryId: 105,
-		url: 'https://example.com/audio1',
-		coverUrl: 'https://picsum.photos/300/200?random=8',
-		description: '工程认知训练课程音频讲解',
-		viewCount: 156,
-		downloadCount: 98,
-		author: '吴教授',
-		createTime: '2025-04-15T10:15:00',
-		fileSize: 25600,
-		selected: false
-	},
-	{
-		id: 9,
-		name: '工程训练IV资料包',
-		type: 'archive',
-		categoryId: 104,
-		url: 'https://example.com/zip1',
-		coverUrl: 'https://picsum.photos/300/200?random=9',
-		description: '工程训练IV全套学习资料',
-		viewCount: 432,
-		downloadCount: 267,
-		author: '郑教授',
-		createTime: '2025-04-15T14:50:00',
-		fileSize: 102400,
-		selected: false
-	},
-	{
-		id: 10,
-		name: '激光加工创新作品集',
-		type: 'image',
-		categoryId: 202,
-		url: 'https://example.com/image3',
-		coverUrl: 'https://picsum.photos/300/200?random=10',
-		description: '学生激光加工创新作品展示',
-		viewCount: 567,
-		downloadCount: 289,
-		author: '林老师',
-		createTime: '2025-04-15T16:20:00',
-		fileSize: 40960,
-		selected: false
-	}
-];
-
-// 加载数据
-const loadData = () => {
-	loading.value = true;
-	
-	// 模拟API请求延迟
-	setTimeout(() => {
-		// 应用分类和类型过滤
-		let filteredData = [...allResources];
+// 替换预览资源的函数
+async function previewResource(resource) {
+	try {
+		// 从IndexedDB获取文件并创建URL
+		const url = await createResourceUrl(resource.id);
 		
-		// 按分类筛选
-		if (categoryId.value !== 0) {
-			const targetCategory = categoryList.value.find(c => c.id === categoryId.value);
-			if (targetCategory) {
-				// 获取该分类下的所有子分类
-				const subCats = subcategories.value.filter(s => s.parentId === targetCategory.id);
-				const subCatIds = subCats.map(s => s.id);
-				filteredData = filteredData.filter(r => subCatIds.includes(r.categoryId));
+		if (url) {
+			// 根据资源类型处理预览
+			if (resource.type === 'video') {
+				currentVideoUrl.value = url;
+				createdUrls.value.push(url); // 保存URL以便后续释放
+				videoPreviewDialog.value = true;
+			} else if (resource.type === 'image') {
+				// 使用Element Plus的图片预览
+				const imgViewer = document.createElement('img');
+				imgViewer.src = url;
+				createdUrls.value.push(url); // 保存URL以便后续释放
+				
+				// 触发点击以打开预览
+				imgViewer.click();
+			} else {
+				// 在新窗口打开文档
+				window.open(url, '_blank');
 			}
+		} else {
+			ElMessage.warning('无法预览此资源');
 		}
-		
-		// 按类型筛选
-		if (resourceType.value) {
-			filteredData = filteredData.filter(r => r.type === resourceType.value);
-		}
-		
-		// 关键字搜索
-		if (search.keyword) {
-			const keyword = search.keyword.toLowerCase();
-			filteredData = filteredData.filter(r => 
-				r.name.toLowerCase().includes(keyword) || 
-				(r.description && r.description.toLowerCase().includes(keyword))
-			);
-		}
-		
-		// 更新分页信息
-		page.total = filteredData.length;
-		
-		// 分页处理
-		const startIndex = (page.currentPage - 1) * page.pageSize;
-		const endIndex = startIndex + page.pageSize;
-		list.value = filteredData.slice(startIndex, endIndex);
-		
-		loading.value = false;
-	}, 500);
-};
-
-// 获取资源分类名称
-const getResourceCategoryName = (categoryId) => {
-	const subCategory = subcategories.value.find(c => c.id === categoryId);
-	if (subCategory) {
-		const parentCategory = categoryList.value.find(c => c.id === subCategory.parentId);
-		return `${parentCategory ? parentCategory.name + ' - ' : ''}${subCategory.name}`;
+	} catch (error) {
+		console.error('预览资源失败:', error);
+		ElMessage.error('预览资源失败');
 	}
-	return '未分类';
-};
+}
+
+// 替换下载资源的函数
+async function downloadResource(resource) {
+	try {
+		// 从IndexedDB获取文件并创建URL
+		const url = await createResourceUrl(resource.id);
+		
+		if (url) {
+			// 创建下载链接
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = resource.name;
+			document.body.appendChild(a);
+			a.click();
+			document.body.removeChild(a);
+			
+			// 释放URL
+	setTimeout(() => {
+				URL.revokeObjectURL(url);
+			}, 100);
+			
+			// 更新下载计数
+			ElMessage.success('下载开始');
+		} else {
+			ElMessage.warning('无法下载此资源');
+		}
+	} catch (error) {
+		console.error('下载资源失败:', error);
+		ElMessage.error('下载资源失败');
+	}
+}
+
+// 释放创建的URL
+function releaseUrls() {
+	createdUrls.value.forEach(url => {
+		URL.revokeObjectURL(url);
+	});
+	createdUrls.value = [];
+}
+
+// 组件销毁前释放资源
+onBeforeUnmount(() => {
+	releaseUrls();
+});
 
 // 计算过滤后的子分类
 const filteredSubcategories = computed(() => {
@@ -1339,79 +726,15 @@ const filteredSubcategories = computed(() => {
 const onSubCategorySelect = (id) => {
 	subCategoryId.value = id;
 	// 根据选择的子分类进行过滤
-	if (id === 0) {
-		loadData();
-		return;
-	}
-	
-	loading.value = true;
-	// 模拟API请求延迟
-	setTimeout(() => {
-		// 应用分类和类型过滤
-		let filteredData = [...allResources];
-		
-		// 按子分类筛选
-		filteredData = filteredData.filter(r => r.categoryId === id);
-		
-		// 按类型筛选
-		if (resourceType.value) {
-			filteredData = filteredData.filter(r => r.type === resourceType.value);
-		}
-		
-		// 关键字搜索
-		if (search.keyword) {
-			const keyword = search.keyword.toLowerCase();
-			filteredData = filteredData.filter(r => 
-				r.name.toLowerCase().includes(keyword) || 
-				(r.description && r.description.toLowerCase().includes(keyword))
-			);
-		}
-		
-		// 更新分页信息
-		page.total = filteredData.length;
-		
-		// 分页处理
-		const startIndex = (page.currentPage - 1) * page.pageSize;
-		const endIndex = startIndex + page.pageSize;
-		list.value = filteredData.slice(startIndex, endIndex);
-		
-		loading.value = false;
-	}, 500);
+	getResourceList();
 };
 
-// 视频预览对话框
-const videoPreviewDialog = ref(false);
-const currentVideoUrl = ref('');
-
-// 构建分类选项层级结构
-const categoryOptions = computed(() => {
-	return categoryList.value.map(category => {
-		const children = subcategories.value
-			.filter(sub => sub.parentId === category.id)
-			.map(sub => ({
-				id: sub.id,
-				name: sub.name,
-				parentId: sub.parentId
-			}));
-			
-		return {
-			id: category.id,
-			name: category.name,
-			children
-		};
-	});
+// 组件挂载后加载数据
+onMounted(() => {
+	// 恢复之前的筛选条件和页面状态
+	getPageState();
+	getResourceList();
 });
-
-// 获取资源分类名称
-const getCategoryName = (id) => {
-	const subcat = subcategories.value.find(c => c.id === id);
-	if (!subcat) return '未分类';
-	
-	const maincat = categoryList.value.find(c => c.id === subcat.parentId);
-	if (!maincat) return subcat.name;
-	
-	return `${maincat.name} - ${subcat.name}`;
-};
 </script>
 
 <style lang="scss" scoped>

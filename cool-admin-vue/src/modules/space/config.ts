@@ -18,6 +18,34 @@ export default (): ModuleConfig => {
 				},
 				path: '/space/list',
 				component: () => import('./views/list.vue')
+			},
+			{
+				meta: {
+					label: '论坛首页'
+				},
+				path: '/forum',
+				component: () => import('./views/index.vue')
+			},
+			{
+				meta: {
+					label: '帖子详情'
+				},
+				path: '/forum/detail',
+				component: () => import('./views/detail.vue')
+			},
+			{
+				meta: {
+					label: '我的帖子'
+				},
+				path: '/forum/mypost',
+				component: () => import('./views/mypost.vue')
+			},
+			{
+				meta: {
+					label: '我的点赞和收藏'
+				},
+				path: '/forum/like',
+				component: () => import('./views/like.vue')
 			}
 		]
 	};
