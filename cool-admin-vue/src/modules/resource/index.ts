@@ -42,6 +42,13 @@ export default () => {
 				meta: {
 					title: "资源上传"
 				}
+			},
+			{
+				path: "/resource/classification",
+				component: () => import("./views/resource_classification.vue"),
+				meta: {
+					title: "资源浏览"
+				}
 			}
 		],
 		app
