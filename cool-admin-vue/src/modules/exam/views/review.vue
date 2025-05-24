@@ -217,152 +217,54 @@ export default {
 				dateRange: [],
 				reviewStatus: ''
 			},
-			papers: [
-				// 复制5份试卷，内容一致，学生名为stu1
-				...Array(5).fill().map((_, i) => ({
-					paperName: '工程实践项目需求分析测试',
-					studentName: 'stu1',
-					submitTime: '2025-05-03 16:29:45',
-					duration: '0分50秒',
-					objectiveScore: 40,
-					subjectiveScore: 0,
-					totalScore: 100,
-					reviewStatus: 'unreviewed',
-					questions: [] // 只第一个有题目，其他为空
-				})),
-			],
+			papers: [],
 			dialogVisible: false,
 			currentPaper: null
 		}
 	},
 	created() {
-		// 只给第一个试卷加题目
-		this.papers[0].questions = [
-			// 单选题
-			{
-				type: 1,
-				content: '在工程实训项目中，需求分析阶段的主要任务是什么？',
-				options: ['编写代码', '确定软件需要实现的功能', '进行系统测试', '部署软件'],
-				userAnswer: 0,
-				correctAnswer: 1,
-				isCorrect: false,
-				score: 0,
-				totalScore: 10
-			},
-			{
-				type: 1,
-				content: '工程实训过程中，关于接口和抽象类的描述，以下哪项是正确的？',
-				options: ['接口可以包含实现代码，抽象类不能', '一个类可以实现多个接口，但只能继承一个抽象类', '抽象类中的方法必须是抽象的', '接口中不能定义变量'],
-				userAnswer: 0,
-				correctAnswer: 1,
-				isCorrect: false,
-				score: 0,
-				totalScore: 10
-			},
-			{
-				type: 1,
-				content: '在工程实训项目的面向对象编程中，下列哪种关系表示\'是一种\'的概念？',
-				options: ['组合关系', '聚合关系', '继承关系', '依赖关系'],
-				userAnswer: 0,
-				correctAnswer: 2,
-				isCorrect: false,
-				score: 0,
-				totalScore: 10
-			},
-			{
-				type: 1,
-				content: '工程实训项目中，以下哪种数据结构适合实现先进先出（FIFO）的操作？',
-				options: ['栈', '队列', '树', '图'],
-				userAnswer: 0,
-				correctAnswer: 1,
-				isCorrect: false,
-				score: 0,
-				totalScore: 10
-			},
-			{
-				type: 1,
-				content: '在工程实训项目的Web开发中，HTTP状态码200表示什么？',
-				options: ['请求成功', '资源未找到', '服务器错误', '重定向'],
-				userAnswer: 1,
-				correctAnswer: 0,
-				isCorrect: false,
-				score: 0,
-				totalScore: 10
-			},
-			{
-				type: 1,
-				content: '工程实训项目中，以下哪个不是关系型数据库管理系统？',
-				options: ['MySQL', 'PostgreSQL', 'MongoDB', 'Oracle'],
-				userAnswer: 0,
-				correctAnswer: 2,
-				isCorrect: false,
-				score: 0,
-				totalScore: 10
-			},
-			{
-				type: 1,
-				content: '在工程实训的前端开发中，下列哪个CSS选择器的优先级最高？',
-				options: ['标签选择器', '类选择器', 'ID选择器', '通配符选择器'],
-				userAnswer: 0,
-				correctAnswer: 2,
-				isCorrect: false,
-				score: 0,
-				totalScore: 10
-			},
-			{
-				type: 1,
-				content: '工程实训项目中，以下哪个协议用于安全的网页浏览？',
-				options: ['HTTP', 'FTP', 'HTTPS', 'SMTP'],
-				userAnswer: 0,
-				correctAnswer: 2,
-				isCorrect: false,
-				score: 0,
-				totalScore: 10
-			},
-			{
-				type: 1,
-				content: '在工程实训项目的前端开发中，以下哪个不是JavaScript的数据类型？',
-				options: ['String', 'Boolean', 'Float', 'Undefined'],
-				userAnswer: 0,
-				correctAnswer: 2,
-				isCorrect: false,
-				score: 0,
-				totalScore: 10
-			},
-			// 主观题
-			{
-				type: 4,
-				content: '请简述需求分析阶段的主要工作内容。',
-				userAnswer: '',
-				correctAnswer: '调研、收集和分析用户需求，形成需求规格说明书，为后续设计开发提供依据。',
-				score: 0,
-				totalScore: 10,
-				comment: ''
-			}
-		];
+		this.loadPapers()
 	},
 	computed: {
 		filteredPapers() {
 			return this.papers.filter(paper => {
-				const nameMatch = !this.filterForm.paperName || paper.paperName.includes(this.filterForm.paperName)
-				const statusMatch = !this.filterForm.reviewStatus || paper.reviewStatus === this.filterForm.reviewStatus
-				const dateMatch = !this.filterForm.dateRange || this.filterForm.dateRange.length === 0 || 
-					(new Date(paper.submitTime) >= this.filterForm.dateRange[0] && 
-					 new Date(paper.submitTime) <= this.filterForm.dateRange[1])
-				return nameMatch && statusMatch && dateMatch
-			})
+				// 试卷名称筛选
+				const nameMatch = !this.filterForm.paperName || 
+					paper.paperName.toLowerCase().includes(this.filterForm.paperName.toLowerCase());
+				
+				// 日期范围筛选
+				let dateMatch = true;
+				if (this.filterForm.dateRange && this.filterForm.dateRange.length === 2) {
+					const submitDate = new Date(paper.submitTime);
+					const startDate = this.filterForm.dateRange[0];
+					const endDate = this.filterForm.dateRange[1];
+					// 设置结束日期为当天的23:59:59，确保包含当天
+					endDate.setHours(23, 59, 59, 999);
+					dateMatch = submitDate >= startDate && submitDate <= endDate;
+				}
+				
+				// 批阅状态筛选
+				const statusMatch = !this.filterForm.reviewStatus || 
+					(this.filterForm.reviewStatus === 'reviewed' ? paper.reviewStatus === 'reviewed' : !paper.reviewStatus || paper.reviewStatus === 'unreviewed');
+				
+				return nameMatch && dateMatch && statusMatch;
+			});
 		}
 	},
 	methods: {
+		loadPapers() {
+			const all = JSON.parse(localStorage.getItem('examHistory') || '[]');
+			this.papers = all.filter(p => !p.reviewStatus || p.reviewStatus === 'unreviewed');
+		},
 		searchPapers() {
-			// 实现搜索逻辑
+			// 直接使用计算属性filteredPapers，无需额外操作
 		},
 		resetForm() {
 			this.filterForm = {
 				paperName: '',
 				dateRange: [],
 				reviewStatus: ''
-			}
+			};
 		},
 		getScoreClass(score) {
 			if (score >= 90) return 'score-excellent'
@@ -393,13 +295,15 @@ export default {
 			this.currentPaper.totalScore = totalScore
 		},
 		saveReview() {
-			// 实现保存批阅结果的逻辑
+			// 保存批阅结果到localStorage
 			this.dialogVisible = false
-			// 更新试卷状态
-			const index = this.papers.findIndex(p => p.paperName === this.currentPaper.paperName)
-			if (index !== -1) {
-				this.papers[index] = { ...this.currentPaper, reviewStatus: 'reviewed' }
+			const all = JSON.parse(localStorage.getItem('examHistory') || '[]')
+			const idx = all.findIndex(p => p.paperName === this.currentPaper.paperName && p.submitTime === this.currentPaper.submitTime)
+			if (idx !== -1) {
+				all[idx] = { ...this.currentPaper, reviewStatus: 'reviewed' }
+				localStorage.setItem('examHistory', JSON.stringify(all))
 			}
+			this.loadPapers()
 		}
 	}
 }

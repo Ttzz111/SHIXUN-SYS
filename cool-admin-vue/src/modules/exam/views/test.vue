@@ -892,7 +892,6 @@ function submitExam() {
 	
 	questions.value.forEach((question, index) => {
 		let score = 0;
-		
 		// 根据题型计算得分
 		if (question.type === 1) { // 单选题
 			if (userAnswers.value[index] === question.correctAnswer) {
@@ -904,7 +903,6 @@ function submitExam() {
 				// 多选题需要完全匹配才得分
 				const userArray = [...userAnswers.value[index]].sort();
 				const correctArray = [...question.correctAnswer].sort();
-				
 				if (userArray.length === correctArray.length && 
 					userArray.every((val, i) => val === correctArray[i])) {
 					score = question.score;
@@ -917,14 +915,37 @@ function submitExam() {
 				correctCount++;
 			}
 		}
-		
 		examResult.scores.push(score);
 		totalScore += score;
 	});
 	
 	examResult.totalScore = totalScore;
 	examResult.correctCount = correctCount;
-	
+
+	// === 新增：写入localStorage ===
+	const examRecord = {
+		paperName: currentPaper.value.name,
+		submitTime: new Date().toLocaleString(),
+		duration: examResult.usedTime,
+		score: totalScore,
+		totalScore: currentPaper.value.totalScore,
+		correctRate: Math.round((totalScore / currentPaper.value.totalScore) * 100),
+		correctCount: correctCount,
+		wrongCount: questions.value.length - correctCount,
+		questions: questions.value.map((q, idx) => ({
+			content: q.content,
+			type: q.type,
+			options: q.options || [],
+			userAnswer: userAnswers.value[idx],
+			correctAnswer: q.correctAnswer,
+			isCorrect: examResult.scores[idx] > 0
+		}))
+	};
+	const allHistory = JSON.parse(localStorage.getItem('examHistory') || '[]');
+	allHistory.unshift(examRecord);
+	localStorage.setItem('examHistory', JSON.stringify(allHistory));
+	// === 新增结束 ===
+
 	// 显示提交成功消息
 	ElMessage.success('试卷已提交成功！');
 	

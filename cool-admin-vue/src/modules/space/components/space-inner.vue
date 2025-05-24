@@ -122,7 +122,7 @@ const { t } = useI18n();
 
 const { ViewGroup } = useViewGroup({
 	label: t('分类'),
-	title: t('文件列表'),
+	title: t('资源管理'),
 	service: service.space.type,
 	onEdit() {
 		return {

@@ -132,7 +132,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, reactive, nextTick } from 'vue'
+import { ref, reactive, nextTick, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 // 搜索表单
@@ -147,7 +147,7 @@ const projectList = ref([
   {
     id: 1,
     name: '工程创客训练：立式绳驱动蛇形自动充电手臂结构及控制系统设计',
-    teacher: '王教授',
+    teacher: 'teacher1',
     deadline: '2025-06-30',
     status: 'ongoing',
     requirements: '掌握机械设计、控制系统设计基础，熟悉SolidWorks、MATLAB等软件',
@@ -159,7 +159,7 @@ const projectList = ref([
   {
     id: 2,
     name: '工程创客训练：反射式钢筘筘齿计数器研制',
-    teacher: '李教授',
+    teacher: 'teacher1',
     deadline: '2025-07-15',
     status: 'ongoing',
     requirements: '掌握光学原理、电子电路设计、单片机编程等基础知识',
@@ -171,7 +171,7 @@ const projectList = ref([
   {
     id: 3,
     name: '工程创客训练：飞机机舱紧固件表面腐蚀损伤检测系统研制',
-    teacher: '张教授',
+    teacher: 'teacher1',
     deadline: '2025-07-20',
     status: 'ongoing',
     requirements: '掌握图像处理、机器视觉、Python编程等知识',
@@ -183,7 +183,7 @@ const projectList = ref([
   {
     id: 4,
     name: '工程创客训练：空气源热泵蒸发器设计、计算与制作',
-    teacher: '刘教授',
+    teacher: 'teacher1',
     deadline: '2025-08-01',
     status: 'upcoming',
     requirements: '掌握热力学、传热学、制冷原理等基础知识，熟悉CAD软件',
@@ -195,7 +195,7 @@ const projectList = ref([
   {
     id: 5,
     name: '工程创客训练：基于机器视觉的凸轮类零件尺寸测量',
-    teacher: '陈教授',
+    teacher: 'teacher1',
     deadline: '2025-08-15',
     status: 'upcoming',
     requirements: '掌握机器视觉、图像处理、Python编程等知识',
@@ -207,7 +207,7 @@ const projectList = ref([
   {
     id: 6,
     name: 'Web开发实践项目',
-    teacher: '赵教授',
+    teacher: 'teacher1',
     deadline: '2025-04-30',
     status: 'ended',
     requirements: '掌握HTML、CSS、JavaScript基础，熟悉Vue.js框架',
@@ -232,6 +232,27 @@ const reservationStatus = ref({
     contact: '13800000000',
     reason: '希望提升工程实践能力，参与创新项目。'
   }
+})
+
+// 同步LocalStorage中的预约状态
+function syncReservationStatus() {
+  const reservations = JSON.parse(localStorage.getItem('practiceReservations') || '[]')
+  reservationStatus.value = {}
+  reservations.forEach(r => {
+    // 这里可以加学生ID判断，演示时不过滤
+    reservationStatus.value[r.projectId] = {
+      status: r.status,
+      time: r.applyTime,
+      studentId: r.studentId,
+      name: r.studentName,
+      contact: r.contact,
+      reason: r.reason
+    }
+  })
+}
+
+onMounted(() => {
+  syncReservationStatus()
 })
 
 // 预约弹窗表单相关
@@ -369,18 +390,43 @@ const getProgressColor = (status: string) => {
 // 预约弹窗表单相关
 const closeReserveDialog = () => {
   reserveDialogVisible.value = false
+  syncReservationStatus()
 }
 const submitReserve = () => {
   reserveFormRef.value.validate((valid: boolean) => {
     if (!valid) return
-    // 模拟预约成功
+    // 创建预约记录
+    const reservation = {
+      id: Date.now(), // 使用时间戳作为唯一ID
+      projectId: reserveProject.id,
+      projectName: reserveProject.name,
+      studentId: reserveForm.studentId,
+      studentName: reserveForm.name,
+      contact: reserveForm.contact,
+      reason: reserveForm.reason,
+      status: 'pending',
+      applyTime: new Date().toLocaleString()
+    }
+    
+    // 获取现有预约记录
+    const existingReservations = JSON.parse(localStorage.getItem('practiceReservations') || '[]')
+    
+    // 添加新预约
+    existingReservations.push(reservation)
+    
+    // 保存到LocalStorage
+    localStorage.setItem('practiceReservations', JSON.stringify(existingReservations))
+    
+    // 更新本地状态
     reservationStatus.value[reserveProject.id] = {
       status: 'pending',
       time: new Date().toLocaleString(),
       ...reserveForm
     }
+    
     ElMessage.success('预约成功，等待教师审批')
     reserveDialogVisible.value = false
+    syncReservationStatus()
   })
 }
 </script>
